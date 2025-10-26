@@ -1743,16 +1743,35 @@ app.get('/api/v1/conversations/:id/messages',
         }
       }
 
+      // 🆕 FIX: محاولة قراءة اسم المرسل من metadata إذا لم يكن موجود في sender
+      let senderInfo = null;
+      if (msg.sender) {
+        senderInfo = {
+          id: msg.sender.id,
+          name: `${msg.sender.firstName} ${msg.sender.lastName}`,
+        };
+      } else if (!msg.isFromCustomer && msg.metadata) {
+        // محاولة قراءة من metadata للرسائل القديمة
+        try {
+          const metadata = typeof msg.metadata === 'string' ? JSON.parse(msg.metadata) : msg.metadata;
+          if (metadata.employeeId && metadata.employeeName) {
+            senderInfo = {
+              id: metadata.employeeId,
+              name: metadata.employeeName,
+            };
+          }
+        } catch (e) {
+          // ignore
+        }
+      }
+
       return {
         id: msg.id,
         content: msg.type === 'IMAGE' ? (fileName || 'صورة') :
                 msg.type === 'FILE' ? (fileName || msg.content) : msg.content,
         timestamp: msg.createdAt,
         isFromCustomer: msg.isFromCustomer,
-        sender: msg.sender ? {
-          id: msg.sender.id,
-          name: `${msg.sender.firstName} ${msg.sender.lastName}`,
-        } : null,
+        sender: senderInfo,
         type: msg.type?.toLowerCase() || 'text',
         attachments: (() => {
           try {

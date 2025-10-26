@@ -422,6 +422,31 @@ async function handlePageReply(webhookEvent, pageId = null) {
       aiMessagesCache.delete(messageId);
     }
     
+    // 🆕 FIX: قراءة معرف المرسل (الموظف) من conversation metadata
+    let senderUserId = null; // معرف الموظف (User.id)
+    let senderUserName = null; // اسم الموظف
+    
+    //console.log(`🔍 [ECHO-DEBUG] Conversation metadata exists: ${!!conversation.metadata}`);
+    
+    try {
+      if (conversation.metadata) {
+        const convMetadata = JSON.parse(conversation.metadata);
+        // console.log(`📝 [ECHO-DEBUG] Parsed conversation metadata:`, JSON.stringify(convMetadata));
+        
+        if (convMetadata.lastSenderId) {
+          senderUserId = convMetadata.lastSenderId;
+          senderUserName = convMetadata.lastSenderName || 'موظف';
+          // console.log(`👤 [ECHO-SENDER] Using sender from metadata: ${senderUserName} (${senderUserId})`);
+        } else {
+          // console.warn(`⚠️ [ECHO-SENDER] No lastSenderId found in conversation metadata`);
+        }
+      } else {
+        // console.warn(`⚠️ [ECHO-SENDER] No metadata found in conversation`);
+      }
+    } catch (e) {
+      // console.error('❌ Error parsing conversation metadata for sender info:', e);
+    }
+
     // Save the page reply as a message in the existing conversation
     const pageReplyMessage = await safeQuery(async () => {
       const prisma = getPrisma();
@@ -431,11 +456,14 @@ async function handlePageReply(webhookEvent, pageId = null) {
           type: messageType,
           conversationId: conversation.id,
           isFromCustomer: false, // This is from the page, not the customer
+          senderId: senderUserId, // 🆕 FIX: حفظ معرف الموظف الذي أرسل الرسالة
           attachments: hasAttachments ? JSON.stringify(webhookEvent.message.attachments) : null,
           metadata: JSON.stringify({
             platform: 'facebook',
             source: isAIGenerated ? 'ai_agent' : 'page_reply',
-            senderId: pageSenderId,
+            senderId: pageSenderId, // Facebook page ID
+            employeeId: senderUserId, // 🆕 معرف الموظف
+            employeeName: senderUserName, // 🆕 اسم الموظف
             recipientId: recipientId,
             isFacebookReply: true, // Mark as Facebook page reply
             facebookMessageId: messageId, // Store the Facebook message ID
@@ -453,6 +481,27 @@ async function handlePageReply(webhookEvent, pageId = null) {
         }
       });
     }, 5);
+    
+    // تنظيف الـ metadata بعد حفظ الرسالة
+    if (senderUserId) {
+      try {
+        const convMetadata = JSON.parse(conversation.metadata || '{}');
+        delete convMetadata.lastSenderId;
+        delete convMetadata.lastSenderName;
+        
+        await safeQuery(async () => {
+          const prisma = getPrisma();
+          return await prisma.conversation.update({
+            where: { id: conversation.id },
+            data: {
+              metadata: JSON.stringify(convMetadata)
+            }
+          });
+        }, 3);
+      } catch (e) {
+        console.warn('⚠️ Error cleaning up sender metadata');
+      }
+    }
     
     // Emit Socket.IO event to display in the frontend
     const io = socketService.getIO();

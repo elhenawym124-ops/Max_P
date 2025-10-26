@@ -33,7 +33,7 @@ function updatePageTokenCache(pageId, pageAccessToken, pageName, companyId) {
     lastUsed: Date.now()
   });
 
-  console.log(`💾 [PAGE-CACHE] تم تحديث cache للصفحة: ${pageName} (${pageId}) - شركة: ${companyId}`);
+  //console.log(`💾 [PAGE-CACHE] تم تحديث cache للصفحة: ${pageName} (${pageId}) - شركة: ${companyId}`);
 }
 
 async function getPageToken(pageId) {
@@ -46,23 +46,23 @@ async function getPageToken(pageId) {
 
     // Check if page exists and is connected
     if (!page) {
-      console.log(`⚠️ [PAGE-CACHE] Page ${pageId} not found in database`);
+      //console.log(`⚠️ [PAGE-CACHE] Page ${pageId} not found in database`);
       // Remove from cache if exists
       if (pageTokenCache.has(pageId)) {
         pageTokenCache.delete(pageId);
-        console.log(`🗑️ [PAGE-CACHE] Removed ${pageId} from cache`);
+        //console.log(`🗑️ [PAGE-CACHE] Removed ${pageId} from cache`);
       }
       return null;
     }
 
     // 🔒 CRITICAL: Check if page is disconnected
     if (page.status === 'disconnected') {
-      console.log(`❌ [PAGE-CACHE] Page ${page.pageName} (${pageId}) is DISCONNECTED - cannot use`);
-      console.log(`   Disconnected at: ${page.disconnectedAt}`);
+      //console.log(`❌ [PAGE-CACHE] Page ${page.pageName} (${pageId}) is DISCONNECTED - cannot use`);
+      //console.log(`   Disconnected at: ${page.disconnectedAt}`);
       // Remove from cache if exists
       if (pageTokenCache.has(pageId)) {
         pageTokenCache.delete(pageId);
-        console.log(`🗑️ [PAGE-CACHE] Removed disconnected page from cache`);
+        //console.log(`🗑️ [PAGE-CACHE] Removed disconnected page from cache`);
       }
       return null;
     }
@@ -70,7 +70,7 @@ async function getPageToken(pageId) {
     // Page is connected - update cache and return
     if (page.pageAccessToken) {
       updatePageTokenCache(pageId, page.pageAccessToken, page.pageName, page.companyId);
-      //console.log(`✅ [PAGE-CACHE] Using connected page: ${page.pageName}`);
+      ////console.log(`✅ [PAGE-CACHE] Using connected page: ${page.pageName}`);
       return {
         pageAccessToken: page.pageAccessToken,
         pageName: page.pageName,
@@ -93,7 +93,7 @@ const deleteConverstation = async (req, res) => {
   try {
     const { id } = req.params;
 
-    console.log(`🗑️ Attempting to delete conversation: ${id}`);
+    //console.log(`🗑️ Attempting to delete conversation: ${id}`);
 
     // Check if conversation exists
     const conversation = await prisma.conversation.findUnique({
@@ -128,7 +128,7 @@ const deleteConverstation = async (req, res) => {
       where: { id }
     });
 
-    console.log(`✅ Deleted conversation ${id} with ${deletedMessages.count} messages`);
+    //console.log(`✅ Deleted conversation ${id} with ${deletedMessages.count} messages`);
 
     res.json({
       success: true,
@@ -154,14 +154,14 @@ const deleteConverstation = async (req, res) => {
 
 const postMessageConverstation = async (req, res) => {
   try {
-    console.log(`🔥 POST /api/v1/conversations/${req.params.id}/messages received`);
-    console.log(`📦 Request body:`, req.body);
+    //console.log(`🔥 POST /api/v1/conversations/${req.params.id}/messages received`);
+    //console.log(`📦 Request body:`, req.body);
 
     const { id } = req.params;
     const { message } = req.body;
 
     if (!message) {
-      console.log(`❌ No message content provided`);
+      //console.log(`❌ No message content provided`);
       return res.status(400).json({
         success: false,
         error: 'Message content is required'
@@ -170,7 +170,7 @@ const postMessageConverstation = async (req, res) => {
 
     // التحقق من صحة محتوى الرسالة
     if (!isValidMessageContent(message)) {
-      console.log(`⚠️ [VALIDATION] رسالة فارغة أو غير صالحة تم رفضها: "${message}"`);
+      //console.log(`⚠️ [VALIDATION] رسالة فارغة أو غير صالحة تم رفضها: "${message}"`);
       return res.status(400).json({
         success: false,
         error: 'رسالة فارغة أو غير صالحة',
@@ -181,7 +181,7 @@ const postMessageConverstation = async (req, res) => {
     // Prevent duplicate processing of the same message
     const messageKey = `${id}_${message}_${Date.now()}`;
     if (processedMessages.has(messageKey)) {
-      console.log(`⚠️ Message already processed, skipping duplicate: ${messageKey}`);
+      //console.log(`⚠️ Message already processed, skipping duplicate: ${messageKey}`);
       return res.status(200).json({
         success: true,
         message: 'Message already processed'
@@ -194,7 +194,7 @@ const postMessageConverstation = async (req, res) => {
       processedMessages.delete(messageKey);
     }, 60000);
 
-    console.log(`📤 Sending message to conversation ${id}: ${message}`);
+    //console.log(`📤 Sending message to conversation ${id}: ${message}`);
 
     // 🔧 FIX: Move conversation variable definition to the beginning
     const conversation = await prisma.conversation.findUnique({
@@ -204,14 +204,75 @@ const postMessageConverstation = async (req, res) => {
       }
     });
 
+    // 🆕 FIX: حفظ معرف المستخدم (الموظف) في metadata حتى نستخدمه عند حفظ الـ echo
+    let conversationMetadata = {};
+    if (conversation.metadata) {
+      try {
+        conversationMetadata = JSON.parse(conversation.metadata);
+      } catch (e) {
+        console.warn('⚠️ Error parsing conversation metadata');
+      }
+    }
+    
+    // حفظ معرف المستخدم الحالي في metadata مؤقتاً
+    // 🔧 FIX: استخدام userId من JWT token
+    const senderId = req.user?.userId || req.user?.id;
+    
+    if (req.user && senderId) {
+      // 🔧 FIX: جلب اسم الموظف من قاعدة البيانات
+      let senderName = 'موظف';
+      
+      try {
+        const user = await prisma.user.findUnique({
+          where: { id: senderId },
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            email: true
+          }
+        });
+        
+        if (user) {
+          senderName = `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.email || 'موظف';
+        }
+      } catch (e) {
+        console.warn('⚠️ Error fetching user info:', e.message);
+      }
+      
+      //console.log(`🔍 [DEBUG] req.user data:`, {
+      //   userId: req.user.userId,
+      //   id: req.user.id,
+      //   email: req.user.email,
+      //   role: req.user.role,
+      //   calculatedName: senderName
+      // });
+      
+      conversationMetadata.lastSenderId = senderId; // معرف الموظف اللي بعت الرسالة
+      conversationMetadata.lastSenderName = senderName; // اسم الموظف
+      
+      // حفظ الـ metadata المحدث في المحادثة
+      await prisma.conversation.update({
+        where: { id },
+        data: {
+          metadata: JSON.stringify(conversationMetadata)
+        }
+      });
+      
+      //console.log(`👤 [SENDER-INFO] Saved sender info: ${senderId} - ${senderName}`);
+      //console.log(`📝 [SENDER-INFO] Updated conversation metadata:`, JSON.stringify(conversationMetadata));
+    } else {
+      console.warn(`⚠️ [SENDER-INFO] req.user or senderId is missing!`, req.user);
+    }
+
     // ⚡ OPTIMIZATION: لا نحفظ الرسالة هنا - سيتم حفظها تلقائياً عند استقبال echo من Facebook
     // هذا يمنع التكرار ويضمن أن الرسالة تُحفظ فقط إذا تم إرسالها بنجاح
-    console.log(`⏳ [SEND] Sending message to Facebook - will be saved via echo...`);
+    //console.log(`⏳ [SEND] Sending message to Facebook - will be saved via echo...`);
 
     // 🔧 FIX: Invalidate cache for this conversation to ensure fresh data on refresh
     if (conversation && conversation.companyId) {
       conversationCache.invalidateConversation(id, conversation.companyId);
-      console.log(`🧹 [CACHE] Invalidated cache for conversation ${id} in company ${conversation.companyId}`);
+      //console.log(`🧹 [CACHE] Invalidated cache for conversation ${id} in company ${conversation.companyId}`);
     }
 
     // 🔧 FIX: Update conversation last message (only if message is not empty)
@@ -234,10 +295,10 @@ const postMessageConverstation = async (req, res) => {
       if (conversation && conversation.customer) {
         const recipientId = conversation.customer.facebookId;
         
-        console.log(`🔍 [FACEBOOK-SEND] Attempting to send to recipient: ${recipientId}`);
+        //console.log(`🔍 [FACEBOOK-SEND] Attempting to send to recipient: ${recipientId}`);
         
         if (!recipientId) {
-          console.log('⚠️ No Facebook ID found for customer');
+          //console.log('⚠️ No Facebook ID found for customer');
           facebookSent = false;
         } else {
           // 🔧 إصلاح: البحث عن صفحة Facebook صالحة بدلاً من الاعتماد على lastWebhookPageId
@@ -250,17 +311,17 @@ const postMessageConverstation = async (req, res) => {
             try {
               const metadata = JSON.parse(conversation.metadata);
               if (metadata.pageId) {
-                console.log(`🎯 [FACEBOOK-SEND] Using page ID from conversation metadata: ${metadata.pageId}`);
+                //console.log(`🎯 [FACEBOOK-SEND] Using page ID from conversation metadata: ${metadata.pageId}`);
                 const pageTokenData = await getPageToken(metadata.pageId);
                 if (pageTokenData) {
                   pageData = pageTokenData;
                   actualPageId = metadata.pageId;
                 } else {
-                  console.log('⚠️ [FACEBOOK-SEND] Page token not found for metadata page ID');
+                  //console.log('⚠️ [FACEBOOK-SEND] Page token not found for metadata page ID');
                 }
               }
             } catch (parseError) {
-              console.log('⚠️ [FACEBOOK-SEND] Error parsing conversation metadata:', parseError.message);
+              //console.log('⚠️ [FACEBOOK-SEND] Error parsing conversation metadata:', parseError.message);
             }
           }
           
@@ -281,9 +342,9 @@ const postMessageConverstation = async (req, res) => {
                 companyId: facebookPage.companyId
               };
               actualPageId = facebookPage.pageId;
-              console.log(`✅ [FACEBOOK-SEND] Found Facebook page: ${facebookPage.pageName} (${actualPageId})`);
+              //console.log(`✅ [FACEBOOK-SEND] Found Facebook page: ${facebookPage.pageName} (${actualPageId})`);
             } else {
-              console.log('⚠️ No connected Facebook page found for company');
+              //console.log('⚠️ No connected Facebook page found for company');
             }
           }
           
@@ -293,12 +354,12 @@ const postMessageConverstation = async (req, res) => {
             if (pageTokenData) {
               pageData = pageTokenData;
               actualPageId = lastWebhookPageId;
-              console.log(`🔄 [FACEBOOK-SEND] Using last webhook page: ${lastWebhookPageId}`);
+              //console.log(`🔄 [FACEBOOK-SEND] Using last webhook page: ${lastWebhookPageId}`);
             }
           }
           
           if (pageData && pageData.pageAccessToken && actualPageId) {
-            console.log(`📤 [FACEBOOK-SEND] Sending message via Facebook API...`);
+            //console.log(`📤 [FACEBOOK-SEND] Sending message via Facebook API...`);
             
             // استخدام دالة الإرسال المحسنة
             // 🔧 FIX: استخدم نفس الطريقة التي تستخدمها الصور للإرسال
@@ -314,11 +375,11 @@ const postMessageConverstation = async (req, res) => {
             facebookSent = response.success;
             facebookMessageId = response.messageId; // Store Facebook message ID
             facebookErrorDetails = response; // Store full error details
-            console.log(`📤 [FACEBOOK-SEND] Facebook message sent: ${facebookSent}`);
+            //console.log(`📤 [FACEBOOK-SEND] Facebook message sent: ${facebookSent}`);
             
             // NEW: Handle the specific Facebook error 2018001 more gracefully
             if (!facebookSent && response.error === 'NO_MATCHING_USER') {
-              console.log(`⚠️ [FACEBOOK-SEND] User hasn't started conversation with page`);
+              //console.log(`⚠️ [FACEBOOK-SEND] User hasn't started conversation with page`);
               
               // Update the conversation to indicate this issue
               await prisma.conversation.update({
@@ -335,24 +396,24 @@ const postMessageConverstation = async (req, res) => {
             } else if (!facebookSent) {
               console.error(`❌ [FACEBOOK-SEND] Failed to send: ${response.message}`);
               if (response.solutions) {
-                console.log('🔧 [FACEBOOK-SEND] Solutions:');
+                //console.log('🔧 [FACEBOOK-SEND] Solutions:');
                 response.solutions.forEach(solution => {
-                  console.log(`   - ${solution}`);
+                  //console.log(`   - ${solution}`);
                 });
               }
             } else {
-              console.log(`✅ [FACEBOOK-SEND] Message sent successfully - will be saved via echo`);
+              //console.log(`✅ [FACEBOOK-SEND] Message sent successfully - will be saved via echo`);
             }
           } else {
-            console.log('⚠️ [FACEBOOK-SEND] No valid page access token or page ID available');
-            console.log(`   - Page Data: ${!!pageData}`);
-            console.log(`   - Page Access Token: ${!!pageData?.pageAccessToken}`);
-            console.log(`   - Actual Page ID: ${actualPageId}`);
-            console.log(`   - Last Webhook Page ID: ${lastWebhookPageId}`);
+            //console.log('⚠️ [FACEBOOK-SEND] No valid page access token or page ID available');
+            //console.log(`   - Page Data: ${!!pageData}`);
+            //console.log(`   - Page Access Token: ${!!pageData?.pageAccessToken}`);
+            //console.log(`   - Actual Page ID: ${actualPageId}`);
+            //console.log(`   - Last Webhook Page ID: ${lastWebhookPageId}`);
           }
         }
       } else {
-        console.log('⚠️ [FACEBOOK-SEND] Conversation or customer not found');
+        //console.log('⚠️ [FACEBOOK-SEND] Conversation or customer not found');
       }
     } catch (fbError) {
       console.error('❌ [FACEBOOK-SEND] Error sending Facebook message:', fbError);
@@ -365,7 +426,7 @@ const postMessageConverstation = async (req, res) => {
       // Don't fail the whole operation if Facebook sending fails
     }
 
-    console.log(`✅ Manual reply sent to Facebook - waiting for echo to save`);
+    //console.log(`✅ Manual reply sent to Facebook - waiting for echo to save`);
 
     res.json({
       success: true,
@@ -410,7 +471,7 @@ const uploadFile = async (req, res) => {
       });
     }
 
-    console.log(`📎 ${files.length} file(s) uploaded for conversation ${id}`);
+    //console.log(`📎 ${files.length} file(s) uploaded for conversation ${id}`);
 
     const uploadedFiles = [];
 
@@ -442,7 +503,7 @@ const uploadFile = async (req, res) => {
       };
 
       // ⚡ OPTIMIZATION: لا نحفظ الملف هنا - سيتم حفظه تلقائياً عند استقبال echo من Facebook
-      console.log(`⏳ [FILE-SEND] Sending ${messageType} to Facebook - will be saved via echo...`);
+      //console.log(`⏳ [FILE-SEND] Sending ${messageType} to Facebook - will be saved via echo...`);
 
       // Update conversation last message
       await prisma.conversation.update({
@@ -468,7 +529,7 @@ const uploadFile = async (req, res) => {
       let facebookSent = false;
       let facebookMessageId = null; // Store Facebook message ID
       try {
-        console.log(`🔍 [FACEBOOK-FILE] Checking conversation ${id} for Facebook integration...`);
+        //console.log(`🔍 [FACEBOOK-FILE] Checking conversation ${id} for Facebook integration...`);
         const conversation = await prisma.conversation.findUnique({
           where: { id },
           include: { customer: true }
@@ -478,7 +539,7 @@ const uploadFile = async (req, res) => {
         const facebookUserId = conversation?.customer?.facebookId;
 
         if (conversation && conversation.customer && facebookUserId) {
-          console.log(`📤 [FACEBOOK-FILE] Sending ${messageType} to customer:`, facebookUserId);
+          //console.log(`📤 [FACEBOOK-FILE] Sending ${messageType} to customer:`, facebookUserId);
 
           // Get Facebook page info - NEW: First try to get from conversation metadata
           let facebookPage = null;
@@ -490,7 +551,7 @@ const uploadFile = async (req, res) => {
             try {
               const metadata = JSON.parse(conversation.metadata);
               if (metadata.pageId) {
-                console.log(`🎯 [FACEBOOK-FILE] Using page ID from conversation metadata: ${metadata.pageId}`);
+                //console.log(`🎯 [FACEBOOK-FILE] Using page ID from conversation metadata: ${metadata.pageId}`);
                 const pageTokenData = await getPageToken(metadata.pageId);
                 if (pageTokenData) {
                   facebookPage = {
@@ -501,11 +562,11 @@ const uploadFile = async (req, res) => {
                   };
                   actualPageId = metadata.pageId;
                 } else {
-                  console.log('⚠️ [FACEBOOK-FILE] Page token not found for metadata page ID');
+                  //console.log('⚠️ [FACEBOOK-FILE] Page token not found for metadata page ID');
                 }
               }
             } catch (parseError) {
-              console.log('⚠️ [FACEBOOK-FILE] Error parsing conversation metadata:', parseError.message);
+              //console.log('⚠️ [FACEBOOK-FILE] Error parsing conversation metadata:', parseError.message);
             }
           }
           
@@ -520,13 +581,13 @@ const uploadFile = async (req, res) => {
             
             if (facebookPage) {
               actualPageId = facebookPage.pageId;
-              console.log(`✅ [FACEBOOK-FILE] Found Facebook page: ${facebookPage.pageName} (${actualPageId})`);
+              //console.log(`✅ [FACEBOOK-FILE] Found Facebook page: ${facebookPage.pageName} (${actualPageId})`);
             }
           }
 
           if (facebookPage && facebookPage.pageAccessToken) {
             try {
-              console.log(`📤 [FACEBOOK-FILE] Using production Facebook sending for ${messageType}`);
+              //console.log(`📤 [FACEBOOK-FILE] Using production Facebook sending for ${messageType}`);
 
               // 🔧 PRODUCTION: Use strict validation for file sending
               const result = await sendProductionFacebookMessage(
@@ -538,23 +599,23 @@ const uploadFile = async (req, res) => {
               );
 
               if (result.success) {
-                console.log(`✅ [FACEBOOK-FILE] ${messageType} sent successfully - will be saved via echo`);
+                //console.log(`✅ [FACEBOOK-FILE] ${messageType} sent successfully - will be saved via echo`);
                 facebookSent = true;
                 facebookMessageId = result.messageId;
               } else if (result.blocked) {
                 console.warn(`🚫 [FACEBOOK-FILE] ${messageType} blocked: ${result.message}`);
                 if (result.solutions) {
-                  console.log('🔧 [FACEBOOK-FILE] Suggested solutions:');
+                  //console.log('🔧 [FACEBOOK-FILE] Suggested solutions:');
                   result.solutions.forEach(solution => {
-                    console.log(`   - ${solution}`);
+                    //console.log(`   - ${solution}`);
                   });
                 }
               } else {
                 console.error(`❌ [FACEBOOK-FILE] Failed to send ${messageType}: ${result.message}`);
                 if (result.solutions) {
-                  console.log('🔧 [FACEBOOK-FILE] Suggested solutions:');
+                  //console.log('🔧 [FACEBOOK-FILE] Suggested solutions:');
                   result.solutions.forEach(solution => {
-                    console.log(`   - ${solution}`);
+                    //console.log(`   - ${solution}`);
                   });
                 }
                 
@@ -577,10 +638,10 @@ const uploadFile = async (req, res) => {
               console.error(`❌ [FACEBOOK-FILE] Production send error:`, fbError.message);
             }
           } else {
-            console.log(`⚠️ [FACEBOOK-FILE] No Facebook page configured for company ${conversation.companyId}`);
+            //console.log(`⚠️ [FACEBOOK-FILE] No Facebook page configured for company ${conversation.companyId}`);
           }
         } else {
-          console.log(`⚠️ [FACEBOOK-FILE] Conversation ${id} is not from Facebook or customer has no Facebook ID`);
+          //console.log(`⚠️ [FACEBOOK-FILE] Conversation ${id} is not from Facebook or customer has no Facebook ID`);
         }
       } catch (facebookError) {
         console.error(`❌ [FACEBOOK-FILE] Error in Facebook integration:`, facebookError.message);
@@ -618,7 +679,7 @@ const postReply = async (req, res) => {
     // Prevent duplicate processing of the same message
     const messageKey = `${id}_${message}_${Date.now()}`;
     if (processedMessages.has(messageKey)) {
-      console.log(`⚠️ Message already processed, skipping duplicate: ${messageKey}`);
+      //console.log(`⚠️ Message already processed, skipping duplicate: ${messageKey}`);
       return res.status(200).json({
         success: true,
         message: 'Message already processed'
@@ -631,17 +692,17 @@ const postReply = async (req, res) => {
       processedMessages.delete(messageKey);
     }, 60000);
 
-    console.log(`📤 Sending reply to conversation ${id}: ${message}`);
+    //console.log(`📤 Sending reply to conversation ${id}: ${message}`);
 
     // ⚡ OPTIMIZATION: لا نحفظ الرسالة هنا - سيتم حفظها تلقائياً عند استقبال echo من Facebook
-    console.log(`⏳ [REPLY] Sending message to Facebook - will be saved via echo...`);
+    //console.log(`⏳ [REPLY] Sending message to Facebook - will be saved via echo...`);
 
     // NEW: Send message to Facebook Messenger if conversation is from Facebook
     let facebookSent = false;
     let facebookMessageId = null; // Store Facebook message ID
     let facebookErrorDetails = null; // Store error details for frontend
     try {
-      console.log(`🔍 [FACEBOOK-REPLY] Checking conversation ${id} for Facebook integration...`);
+      //console.log(`🔍 [FACEBOOK-REPLY] Checking conversation ${id} for Facebook integration...`);
       const conversation = await prisma.conversation.findUnique({
         where: { id },
         include: { customer: true }
@@ -651,7 +712,7 @@ const postReply = async (req, res) => {
       const facebookUserId = conversation?.customer?.facebookId;
 
       if (conversation && conversation.customer && facebookUserId) {
-        console.log(`📤 [FACEBOOK-REPLY] Sending reply to customer:`, facebookUserId);
+        //console.log(`📤 [FACEBOOK-REPLY] Sending reply to customer:`, facebookUserId);
 
         // Get Facebook page info - NEW: First try to get from conversation metadata
         let facebookPage = null;
@@ -663,7 +724,7 @@ const postReply = async (req, res) => {
           try {
             const metadata = JSON.parse(conversation.metadata);
             if (metadata.pageId) {
-              console.log(`🎯 [FACEBOOK-REPLY] Using page ID from conversation metadata: ${metadata.pageId}`);
+              //console.log(`🎯 [FACEBOOK-REPLY] Using page ID from conversation metadata: ${metadata.pageId}`);
               const pageTokenData = await getPageToken(metadata.pageId);
               if (pageTokenData) {
                 facebookPage = {
@@ -674,11 +735,11 @@ const postReply = async (req, res) => {
                 };
                 actualPageId = metadata.pageId;
               } else {
-                console.log('⚠️ [FACEBOOK-REPLY] Page token not found for metadata page ID');
+                //console.log('⚠️ [FACEBOOK-REPLY] Page token not found for metadata page ID');
               }
             }
           } catch (parseError) {
-            console.log('⚠️ [FACEBOOK-REPLY] Error parsing conversation metadata:', parseError.message);
+            //console.log('⚠️ [FACEBOOK-REPLY] Error parsing conversation metadata:', parseError.message);
           }
         }
         
@@ -693,13 +754,13 @@ const postReply = async (req, res) => {
           
           if (facebookPage) {
             actualPageId = facebookPage.pageId;
-            console.log(`✅ [FACEBOOK-REPLY] Found Facebook page: ${facebookPage.pageName} (${actualPageId})`);
+            //console.log(`✅ [FACEBOOK-REPLY] Found Facebook page: ${facebookPage.pageName} (${actualPageId})`);
           }
         }
 
         if (facebookPage && facebookPage.pageAccessToken) {
           try {
-            console.log(`📤 [FACEBOOK-REPLY] Using production Facebook sending for TEXT message`);
+            //console.log(`📤 [FACEBOOK-REPLY] Using production Facebook sending for TEXT message`);
 
             // 🔧 PRODUCTION: Use strict validation for sending
             const response = await sendProductionFacebookMessage(
@@ -713,11 +774,11 @@ const postReply = async (req, res) => {
             facebookSent = response.success;
             facebookMessageId = response.messageId; // Store Facebook message ID
             facebookErrorDetails = response; // Store full error details
-            console.log(`📤 [FACEBOOK-REPLY] Facebook message sent: ${facebookSent}`);
+            //console.log(`📤 [FACEBOOK-REPLY] Facebook message sent: ${facebookSent}`);
             
             // NEW: Handle the specific Facebook error 2018001 more gracefully
             if (!facebookSent && response.error === 'NO_MATCHING_USER') {
-              console.log(`⚠️ [FACEBOOK-REPLY] User hasn't started conversation with page`);
+              //console.log(`⚠️ [FACEBOOK-REPLY] User hasn't started conversation with page`);
               
               // Update the conversation to indicate this issue
               await prisma.conversation.update({
@@ -734,13 +795,13 @@ const postReply = async (req, res) => {
             } else if (!facebookSent) {
               console.error(`❌ [FACEBOOK-REPLY] Failed to send: ${response.message}`);
               if (response.solutions) {
-                console.log('🔧 [FACEBOOK-REPLY] Solutions:');
+                //console.log('🔧 [FACEBOOK-REPLY] Solutions:');
                 response.solutions.forEach(solution => {
-                  console.log(`   - ${solution}`);
+                  //console.log(`   - ${solution}`);
                 });
               }
             } else {
-              console.log(`✅ [FACEBOOK-REPLY] Message sent successfully - will be saved via echo`);
+              //console.log(`✅ [FACEBOOK-REPLY] Message sent successfully - will be saved via echo`);
             }
           } catch (sendError) {
             console.error(`❌ [FACEBOOK-REPLY] Error in production sending:`, sendError);
@@ -753,7 +814,7 @@ const postReply = async (req, res) => {
             };
           }
         } else {
-          console.log('⚠️ [FACEBOOK-REPLY] No valid Facebook page or access token found');
+          //console.log('⚠️ [FACEBOOK-REPLY] No valid Facebook page or access token found');
           facebookErrorDetails = {
             success: false,
             error: 'NO_FACEBOOK_PAGE',
@@ -762,7 +823,7 @@ const postReply = async (req, res) => {
           };
         }
       } else {
-        console.log(`🔍 [FACEBOOK-REPLY] Conversation is not from Facebook or customer has no Facebook ID`);
+        //console.log(`🔍 [FACEBOOK-REPLY] Conversation is not from Facebook or customer has no Facebook ID`);
         if (facebookUserId) {
           facebookErrorDetails = {
             success: false,
@@ -785,7 +846,7 @@ const postReply = async (req, res) => {
 
     // ⚡ OPTIMIZATION: لا نرسل Socket event هنا - سيتم إرساله تلقائياً عند استقبال echo من Facebook
     // هذا يمنع ظهور الرسالة مرتين في الفرونت إند
-    console.log(`⏳ [REPLY] Message will appear in frontend when echo is received`);
+    //console.log(`⏳ [REPLY] Message will appear in frontend when echo is received`);
 
     // 🔧 FIX: Update conversation (only if message is not empty)
     if (message && message.trim() !== '') {
@@ -799,7 +860,7 @@ const postReply = async (req, res) => {
       });
     }
 
-    console.log(`✅ Manual reply sent to Facebook - waiting for echo`);
+    //console.log(`✅ Manual reply sent to Facebook - waiting for echo`);
 
     res.json({
       success: true,
@@ -839,7 +900,7 @@ const markConversationAsRead = async (req, res) => {
       });
     }
 
-    console.log(`📖 [MARK-READ] Marking conversation ${id} as read for company ${companyId}`);
+    //console.log(`📖 [MARK-READ] Marking conversation ${id} as read for company ${companyId}`);
 
     // Verify conversation belongs to this company
     const conversation = await prisma.conversation.findFirst({
@@ -869,7 +930,7 @@ const markConversationAsRead = async (req, res) => {
       }
     });
 
-    console.log(`✅ [MARK-READ] Marked ${result.count} messages as read in conversation ${id}`);
+    //console.log(`✅ [MARK-READ] Marked ${result.count} messages as read in conversation ${id}`);
 
     res.json({
       success: true,
@@ -890,7 +951,7 @@ const markConversationAsRead = async (req, res) => {
 const checkHealth = async (req, res) => {
   try {
     const { id } = req.params;
-    console.log(`🔍 [HEALTH-CHECK] Manual check for conversation: ${id}`);
+    //console.log(`🔍 [HEALTH-CHECK] Manual check for conversation: ${id}`);
     
     // ✅ إضافة companyId للعزل الأمني
     const companyId = req.user?.companyId;
