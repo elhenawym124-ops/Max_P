@@ -304,9 +304,18 @@ const ConversationsImprovedFixedContent: React.FC = () => {
           }
         }
 
-        // Debug: Log sender info for employee messages
-        if (!msg.isFromCustomer && msg.sender) {
-          console.log(`👤 [SENDER] ${msg.sender.name} sent: "${msg.content.substring(0, 30)}..."`);
+        // تشخيص مؤقت
+        if (!msg.isFromCustomer) {
+          console.log(`🔍 [MESSAGE-DEBUG] Message ${msg.id}:`, {
+            content: msg.content.substring(0, 50) + '...',
+            type: msg.type,
+            isAiGenerated: isAiGenerated,
+            hasMetadata: !!msg.metadata,
+            fileUrl: msg.fileUrl,
+            fileName: msg.fileName,
+            hasAttachments: !!(msg.attachments && msg.attachments.length > 0),
+            metadata: msg.metadata ? (typeof msg.metadata === 'string' ? msg.metadata.substring(0, 100) + '...' : JSON.stringify(msg.metadata).substring(0, 100) + '...') : null
+          });
         }
 
         return {

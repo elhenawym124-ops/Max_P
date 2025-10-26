@@ -422,76 +422,37 @@ async function handlePageReply(webhookEvent, pageId = null) {
       aiMessagesCache.delete(messageId);
     }
     
-    // ✅ Check if message already exists (to prevent duplicates from echo)
-    const prisma = getPrisma();
-    const existingMessage = await safeQuery(async () => {
-      return await prisma.message.findFirst({
-        where: {
-          conversationId: conversation.id,
+    // Save the page reply as a message in the existing conversation
+    const pageReplyMessage = await safeQuery(async () => {
+      const prisma = getPrisma();
+      return await prisma.message.create({
+        data: {
           content: messageContent,
-          isFromCustomer: false,
-          createdAt: {
-            gte: new Date(Date.now() - 60000) // Check last minute
-          }
-        },
-        include: {
-          sender: {
-            select: {
-              id: true,
-              firstName: true,
-              lastName: true
-            }
-          }
+          type: messageType,
+          conversationId: conversation.id,
+          isFromCustomer: false, // This is from the page, not the customer
+          attachments: hasAttachments ? JSON.stringify(webhookEvent.message.attachments) : null,
+          metadata: JSON.stringify({
+            platform: 'facebook',
+            source: isAIGenerated ? 'ai_agent' : 'page_reply',
+            senderId: pageSenderId,
+            recipientId: recipientId,
+            isFacebookReply: true, // Mark as Facebook page reply
+            facebookMessageId: messageId, // Store the Facebook message ID
+            hasAttachments: hasAttachments,
+            timestamp: new Date(webhookEvent.timestamp),
+            // ⚡ Add AI metadata if available
+            ...(isAIGenerated && aiMetadata ? {
+              isAIGenerated: true,
+              intent: aiMetadata.intent,
+              sentiment: aiMetadata.sentiment,
+              confidence: aiMetadata.confidence
+            } : {})
+          }),
+          createdAt: new Date(webhookEvent.timestamp)
         }
       });
-    }, 3);
-
-    let pageReplyMessage = existingMessage;
-    
-    if (existingMessage) {
-      console.log(`⚠️ [ECHO-SKIP] Message already exists (sent via API) - skipping duplicate save`);
-    } else {
-      // Save the page reply as a message in the existing conversation
-      pageReplyMessage = await safeQuery(async () => {
-        return await prisma.message.create({
-          data: {
-            content: messageContent,
-            type: messageType,
-            conversationId: conversation.id,
-            isFromCustomer: false, // This is from the page, not the customer
-            attachments: hasAttachments ? JSON.stringify(webhookEvent.message.attachments) : null,
-            metadata: JSON.stringify({
-              platform: 'facebook',
-              source: isAIGenerated ? 'ai_agent' : 'page_reply',
-              senderId: pageSenderId,
-              recipientId: recipientId,
-              isFacebookReply: true, // Mark as Facebook page reply
-              facebookMessageId: messageId, // Store the Facebook message ID
-              hasAttachments: hasAttachments,
-              timestamp: new Date(webhookEvent.timestamp),
-              // ⚡ Add AI metadata if available
-              ...(isAIGenerated && aiMetadata ? {
-                isAIGenerated: true,
-                intent: aiMetadata.intent,
-                sentiment: aiMetadata.sentiment,
-                confidence: aiMetadata.confidence
-              } : {})
-            }),
-            createdAt: new Date(webhookEvent.timestamp)
-          },
-          include: {
-            sender: {
-              select: {
-                id: true,
-                firstName: true,
-                lastName: true
-              }
-            }
-          }
-        });
-      }, 5);
-      console.log(`💾 [ECHO-SAVE] Message saved from echo`);
-    }
+    }, 5);
     
     // Emit Socket.IO event to display in the frontend
     const io = socketService.getIO();
@@ -509,12 +470,7 @@ async function handlePageReply(webhookEvent, pageId = null) {
         isFacebookReply: true, // Mark as Facebook page reply for frontend
         facebookMessageId: messageId, // Include Facebook message ID
         // ⚡ Add isAiGenerated flag for frontend styling
-        isAiGenerated: parsedMetadata.isAIGenerated || false,
-        // ✅ Add sender information
-        sender: pageReplyMessage.sender ? {
-          id: pageReplyMessage.sender.id,
-          name: `${pageReplyMessage.sender.firstName} ${pageReplyMessage.sender.lastName}`
-        } : null
+        isAiGenerated: parsedMetadata.isAIGenerated || false
       };
       
       io.emit('new_message', socketData);
