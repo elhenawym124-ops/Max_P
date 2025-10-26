@@ -21,6 +21,7 @@ if (shouldLazyLoad) {
   //console.log('🚀 [PERFORMANCE] Fast startup mode enabled - deferring heavy services');
 }
 
+
 // استيراد نظام البيئة الذكي
 const envConfig = require('./config/environment');
 
@@ -416,7 +417,7 @@ async function startServer() {
   server.listen(PORT, async () => {
     serverStarted = true;
     console.log(`Mahmoud Ahmed`);
-    
+    console.log(`Mahmoud Ahmed`);
     if (dbInitialized) {
       console.log(`🎉 Server running on port ${PORT} with DATABASE`);
     } else {
