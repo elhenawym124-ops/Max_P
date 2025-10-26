@@ -7,9 +7,12 @@
 
 const { PrismaClient } = require('@prisma/client');
 
+const { getSharedPrismaClient } = require('./sharedDatabase');
+
 class SuccessAnalyzer {
   constructor() {
-    this.prisma = new PrismaClient();
+    // Use shared PrismaClient instead of creating new instance
+    this.prisma = getSharedPrismaClient();
     this.analysisCache = new Map();
     this.minSampleSize = 3; // الحد الأدنى للعينات (تم تقليله من 10)
     this.confidenceThreshold = 0.5; // حد الثقة المطلوب (تم تقليله من 0.75)

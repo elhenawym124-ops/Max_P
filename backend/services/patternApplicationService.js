@@ -4,10 +4,12 @@
  */
 
 const { PrismaClient } = require('@prisma/client');
+const { getSharedPrismaClient } = require('./sharedDatabase');
 
 class PatternApplicationService {
   constructor() {
-    this.prisma = new PrismaClient();
+    // Use shared PrismaClient instead of creating new instance
+    this.prisma = getSharedPrismaClient();
     this.patternCache = new Map(); // تخزين مؤقت للأنماط المعتمدة
     this.cacheExpiry = 5 * 60 * 1000; // 5 دقائق
     this.lastCacheUpdate = new Map();

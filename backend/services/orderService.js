@@ -1,5 +1,5 @@
-const { PrismaClient } = require('@prisma/client');
-const prisma = new PrismaClient();
+const { getSharedPrismaClient } = require('./sharedDatabase');
+const prisma = getSharedPrismaClient();
 
 class OrderService {
   constructor() {

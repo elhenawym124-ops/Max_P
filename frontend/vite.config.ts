@@ -31,17 +31,17 @@ export default defineConfig({
     strictPort: true, // فشل إذا كان المنفذ مُستخدم بدلاً من البحث عن منفذ آخر
     proxy: {
       '/api': {
-        target: 'http://localhost:3001',
+        target: 'http://localhost:3007',
         changeOrigin: true,
         secure: false,
       },
       '/webhooks': {
-        target: 'http://localhost:3001',
+        target: 'http://localhost:3007',
         changeOrigin: true,
         secure: false,
       },
       '/socket.io': {
-        target: 'http://localhost:3001',
+        target: 'http://localhost:3007',
         changeOrigin: true,
         ws: true,
       },

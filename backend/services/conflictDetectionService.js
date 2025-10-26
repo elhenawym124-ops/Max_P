@@ -3,8 +3,8 @@
  * Conflict Detection Service for Prompt vs Patterns
  */
 
-const { PrismaClient } = require('@prisma/client');
-const prisma = new PrismaClient();
+const { getSharedPrismaClient } = require('./sharedDatabase');
+const prisma = getSharedPrismaClient();
 
 class ConflictDetectionService {
   constructor() {

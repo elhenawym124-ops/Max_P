@@ -1,8 +1,10 @@
 const { PrismaClient } = require('@prisma/client');
+const { getSharedPrismaClient } = require('./sharedDatabase');
 
 class EnhancedOrderService {
   constructor() {
-    this.prisma = new PrismaClient();
+    // Use shared PrismaClient instead of creating new instance
+    this.prisma = getSharedPrismaClient();
   }
 
   /**

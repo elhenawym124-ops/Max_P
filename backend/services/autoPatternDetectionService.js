@@ -20,16 +20,31 @@ class AutoPatternDetectionService {
   }
 
   /**
-   * تحميل الشركات من قاعدة البيانات
+   * تحميل الشركات من قاعدة البيانات (فقط الشركات التي لديها مفاتيح API نشطة)
    */
   async loadCompanies() {
     try {
+      // جلب الشركات التي لديها مفاتيح Gemini نشطة فقط
       const companies = await this.prisma.company.findMany({
-        select: { id: true, name: true }
+        where: {
+          geminiKeys: {
+            some: {
+              isActive: true
+            }
+          }
+        },
+        select: { 
+          id: true, 
+          name: true,
+          geminiKeys: {
+            where: { isActive: true },
+            select: { id: true }
+          }
+        }
       });
 
       this.companies = companies.map(c => c.id);
-      //console.log(`🏢 [AutoPatternService] Loaded ${this.companies.length} companies for pattern detection`);
+      console.log(`🏢 [AutoPatternService] Loaded ${this.companies.length} companies with active API keys for pattern detection`);
 
       return this.companies;
     } catch (error) {

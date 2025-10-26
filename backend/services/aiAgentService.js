@@ -97,11 +97,19 @@ class AIAgentService {
    * Process customer message and generate AI response
    */
   async processCustomerMessage(messageData) {
+    const startTime = Date.now(); // ✨ تم نقله خارج try block
+    let finalCompanyId = null; // ✨ تعريف خارج try block
+    let conversationId = null; // ✨ تعريف خارج try block
+    let senderId = null; // ✨ تعريف خارج try block
+    let content = null; // ✨ تعريف خارج try block
     try {
       //console.log('🤖 Processing customer message with advanced RAG system...');
-      const startTime = Date.now();
       console.log(messageData)
-      const { conversationId, senderId, content, attachments, customerData, companyId, customPrompt } = messageData;
+      // ✨ تعيين القيم (التعريف في الأعلى)
+      conversationId = messageData.conversationId;
+      senderId = messageData.senderId;
+      content = messageData.content;
+      const { attachments, customerData, companyId, customPrompt } = messageData;
       
       // 🔍 Enhanced diagnostics
       //console.log(`🔍 [AI-PROCESS] Processing message for company: ${companyId || 'NULL'}`);
@@ -236,7 +244,7 @@ class AIAgentService {
       }
 
       // Get active Gemini key using session-aware system with company isolation
-      let finalCompanyId = companyId || customerData?.companyId;
+      finalCompanyId = companyId || customerData?.companyId; // ✨ تم تعيين القيمة فقط (التعريف في السطر 101)
       //console.log(`🏢 [AI-PROCESS] Final company ID for processing: ${finalCompanyId || 'NULL'}`);
       
       // Enhanced diagnostics for companyId tracking
@@ -1389,6 +1397,69 @@ ${imageAnalysis}
     //console.log('✅ استخدام personality prompt مخصص من الشركة');
     prompt += `${companyPrompts.personalityPrompt.trim()}\n\n`;
 
+    // ✨ تحليل ذكي للسياق باستخدام DynamicPromptBuilder
+    let contextualInsights = '';
+    try {
+      const dynamicBuilder = require('./dynamicPromptBuilder'); // ✅ استخدام singleton instance
+      
+      // تحليل الحالة العاطفية
+      const emotionalState = dynamicBuilder.detectEmotionalState(customerMessage);
+      
+      // تحديد أسلوب العميل
+      const customerTone = dynamicBuilder.detectCustomerTone(customerMessage);
+      
+      // تحديد مستوى الاستعجال
+      const urgencyLevel = dynamicBuilder.detectUrgencyLevel(customerMessage);
+      
+      // تحديد وقت اليوم
+      const timeOfDay = dynamicBuilder.getTimeOfDay();
+      
+      // تحديد مرحلة المحادثة
+      const conversationPhase = dynamicBuilder.determineConversationPhase(conversationMemory);
+      
+      // بناء الـ contextual insights
+      contextualInsights += `🎯 تحليل ذكي للسياق:\n`;
+      contextualInsights += `=====================================\n`;
+      
+      if (emotionalState !== 'neutral') {
+        contextualInsights += `💭 الحالة العاطفية: ${emotionalState === 'happy' ? '😊 سعيد/متفائل' : emotionalState === 'frustrated' ? '😤 محبط/منزعج' : emotionalState === 'confused' ? '🤔 محتار/غير متأكد' : 'متحمس'}\n`;
+      }
+      
+      if (customerTone !== 'neutral') {
+        contextualInsights += `🎭 أسلوب العميل: ${customerTone === 'formal' ? '📝 رسمي' : customerTone === 'casual' ? '😊 ودود/غير رسمي' : 'متوازن'}\n`;
+      }
+      
+      if (urgencyLevel !== 'normal') {
+        contextualInsights += `⏱️ مستوى الاستعجال: ${urgencyLevel === 'high' ? '🔴 عالي جداً - يحتاج رد سريع!' : urgencyLevel === 'medium' ? '🟡 متوسط' : 'منخفض'}\n`;
+      }
+      
+      contextualInsights += `🕐 التوقيت: ${timeOfDay === 'morning' ? '🌅 صباح' : timeOfDay === 'afternoon' ? '☀️ ظهيرة' : timeOfDay === 'evening' ? '🌆 مساء' : '🌙 ليل'}\n`;
+      contextualInsights += `📊 مرحلة المحادثة: ${conversationPhase}\n`;
+      contextualInsights += `=====================================\n`;
+      contextualInsights += `💡 تكيفي مع الحالة العاطفية وأسلوب العميل في ردك.\n`;
+      
+      // إضافة نصائح خاصة بناءً على التحليل
+      if (emotionalState === 'frustrated') {
+        contextualInsights += `⚠️ العميل يبدو منزعج - كوني أكثر تعاطفاً واهتماماً، واعتذري إذا كان هناك مشكلة.\n`;
+      }
+      if (urgencyLevel === 'high') {
+        contextualInsights += `⚡ العميل يحتاج رد سريع - اذهبي مباشرة للموضوع بدون مقدمات طويلة.\n`;
+      }
+      if (customerTone === 'formal') {
+        contextualInsights += `📋 العميل يستخدم أسلوب رسمي - حافظي على نفس المستوى من الرسمية.\n`;
+      } else if (customerTone === 'casual') {
+        contextualInsights += `😊 العميل يستخدم أسلوب ودود - كوني طبيعية وودودة في ردك.\n`;
+      }
+      
+      contextualInsights += `\n`;
+      
+      prompt += contextualInsights;
+      
+    } catch (dynamicError) {
+      console.error('⚠️ [DYNAMIC-BUILDER] خطأ في التحليل الذكي:', dynamicError);
+      // الاستمرار بدون التحليل الذكي
+    }
+
     // 🚚 إضافة معلومات الشحن إذا كان العميل يسأل عنها أو ذكر محافظة
     try {
       const shippingService = require('./shippingService');
@@ -1585,6 +1656,57 @@ ${smartResponseInfo && smartResponseInfo.hasSpecificProduct && !multipleProducts
   }
 
   /**
+   * ✨ بناء إعدادات التوليد الديناميكية بناءً على السياق
+   */
+  async buildGenerationConfig(companyId, messageContext = {}) {
+    try {
+      // الحصول على إعدادات AI من قاعدة البيانات
+      const settings = await this.getSettings(companyId);
+      
+      // الإعدادات الأساسية
+      const baseConfig = {
+        temperature: settings.aiTemperature || 0.7,
+        topK: settings.aiTopK || 40,
+        topP: settings.aiTopP || 0.9,
+        maxOutputTokens: settings.aiMaxTokens || 1024,
+      };
+
+      // تعديل الإعدادات حسب نوع الرسالة
+      const messageType = messageContext.messageType || 'general';
+      
+      if (messageType === 'greeting' || messageType === 'casual_chat') {
+        // للتحيات والدردشة: إبداع أعلى قليلاً
+        baseConfig.temperature = Math.min(baseConfig.temperature + 0.1, 0.9);
+      } else if (messageType === 'order_confirmation' || messageType === 'order_details') {
+        // لتأكيد الطلبات: دقة عالية (temperature منخفض)
+        baseConfig.temperature = 0.3;
+        baseConfig.topK = 10;
+        baseConfig.topP = 0.8;
+      } else if (messageType === 'product_inquiry' || messageType === 'price_inquiry') {
+        // للاستفسارات: توازن بين الدقة والإبداع
+        baseConfig.temperature = 0.6;
+      } else if (messageType === 'complaint' || messageType === 'problem') {
+        // للشكاوى: دقة عالية وتعاطف
+        baseConfig.temperature = 0.4;
+        baseConfig.topK = 20;
+      }
+
+      //console.log(`🎛️ [AI-CONFIG] Using generation config:`, baseConfig);
+      return baseConfig;
+      
+    } catch (error) {
+      console.error('❌ [AI-CONFIG] Error building generation config:', error);
+      // إرجاع الإعدادات الافتراضية عند حدوث خطأ
+      return {
+        temperature: 0.7,
+        topK: 40,
+        topP: 0.9,
+        maxOutputTokens: 1024,
+      };
+    }
+  }
+
+  /**
    * Generate AI response using Gemini API with Pattern Enhancement
    */
   async generateAIResponse(prompt, conversationMemory , useRAG , providedGeminiConfig , companyId , conversationId, messageContext) {
@@ -1608,6 +1730,9 @@ ${smartResponseInfo && smartResponseInfo.hasSpecificProduct && !multipleProducts
         throw new Error(`No active Gemini key found for company: ${companyId}`);
       }
 
+      // ✨ الحصول على إعدادات التوليد الديناميكية
+      const generationConfig = await this.buildGenerationConfig(companyId, messageContext);
+
       // Step 1: Enhance prompt with approved patterns (if companyId provided)
       let enhancedPrompt = prompt;
       let approvedPatterns = [];
@@ -1630,10 +1755,13 @@ ${smartResponseInfo && smartResponseInfo.hasSpecificProduct && !multipleProducts
         }
       }
 
-      // Step 2: Generate AI response using enhanced prompt
+      // Step 2: Generate AI response using enhanced prompt with dynamic config
       const { GoogleGenerativeAI } = require('@google/generative-ai');
       const genAI = new GoogleGenerativeAI(geminiConfig.apiKey);
-      const model = genAI.getGenerativeModel({ model: geminiConfig.model });
+      const model = genAI.getGenerativeModel({ 
+        model: geminiConfig.model,
+        generationConfig // ✨ إضافة الإعدادات الديناميكية هنا
+      });
 
       const result = await model.generateContent(enhancedPrompt);
       const response = result.response;
@@ -1658,6 +1786,41 @@ ${smartResponseInfo && smartResponseInfo.hasSpecificProduct && !multipleProducts
           console.error('⚠️ [AIAgent] Error optimizing response:', optimizationError);
           // Continue with original response if optimization fails
         }
+      }
+
+      // ✨ Step 3.5: Apply diversity check to prevent repetition
+      try {
+        const settings = await this.getSettings(companyId);
+        if (settings.enableDiversityCheck) {
+          const diversityService = require('./responseDiversityService');
+          aiContent = await diversityService.diversifyResponse(
+            aiContent,
+            conversationId,
+            conversationMemory
+          );
+          //console.log('🔄 [AIAgent] Diversity check applied');
+        }
+      } catch (diversityError) {
+        console.error('⚠️ [AIAgent] Error in diversity check:', diversityError);
+        // Continue with current response
+      }
+
+      // ✨ Step 3.6: Adapt tone to customer's style
+      try {
+        const settings = await this.getSettings(companyId);
+        if (settings.enableToneAdaptation && conversationMemory && conversationMemory.length > 0) {
+          const toneService = require('./toneAdaptationService');
+          const customerMessages = conversationMemory.map(m => m.userMessage);
+          const toneAnalysis = toneService.analyzeTone(customerMessages);
+          
+          if (toneAnalysis.confidence > 0.3) {
+            aiContent = toneService.adaptResponseToTone(aiContent, toneAnalysis);
+            //console.log(`🎯 [AIAgent] Tone adapted to: ${toneAnalysis.dominantTone}`);
+          }
+        }
+      } catch (toneError) {
+        console.error('⚠️ [AIAgent] Error in tone adaptation:', toneError);
+        // Continue with current response
       }
 
       // Step 4: Record pattern usage for performance tracking (BATCH OPTIMIZED)

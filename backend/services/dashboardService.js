@@ -6,10 +6,12 @@
  */
 
 const { PrismaClient } = require('@prisma/client');
+const { getSharedPrismaClient } = require('./sharedDatabase');
 
 class DashboardService {
   constructor() {
-    this.prisma = new PrismaClient();
+    // Use shared PrismaClient instead of creating new instance
+    this.prisma = getSharedPrismaClient();
     this.dashboards = new Map(); // User dashboards
     this.widgets = new Map(); // Available widgets
     this.metrics = new Map(); // Real-time metrics

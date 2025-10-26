@@ -4,24 +4,25 @@
  */
 
 const detectEnvironment = () => {
-  // فحص متغيرات البيئة أولاً
-  if (process.env.NODE_ENV === 'production') {
+  // فحص إذا كان في بيئة تطوير محلية
+  const isLocalDevelopment = (
+    process.env.NODE_ENV === 'development' ||
+    !process.env.NODE_ENV ||
+    process.env.PORT === '3007' ||
+    !process.env.DATABASE_URL?.includes('production')
+  );
+  
+  // إذا كان NODE_ENV مضبوط صراحة على production
+  if (process.env.NODE_ENV === 'production' && process.env.DATABASE_URL?.includes('production')) {
     return 'production';
   }
   
-  if (process.env.NODE_ENV === 'development') {
+  // أي حالة أخرى = تطوير
+  if (isLocalDevelopment) {
     return 'development';
   }
   
-  // فحص الـ hostname أو المنافذ
-  const port = process.env.PORT || '3007';
-  
-  // إذا كان المنفذ محلي أو في نطاق التطوير
-  if (port === '3007' || port === '3007' || process.env.NODE_ENV !== 'production') {
-    return 'development';
-  }
-  
-  return 'production';
+  return 'development'; // Default to development for safety
 };
 
 const createEnvironmentConfig = () => {
@@ -37,7 +38,7 @@ const createEnvironmentConfig = () => {
   if (isDevelopment) {
     // إعدادات بيئة التطوير
     const backendPort = process.env.PORT || '3007';
-    const frontendPort = '3008';
+    const frontendPort = '3000';
     
     frontendUrl = `http://localhost:${frontendPort}`;
     backendUrl = `http://localhost:${backendPort}`;
@@ -64,7 +65,7 @@ const createEnvironmentConfig = () => {
     
     // CORS Origins - Allow both www and non-www domains
     corsOrigins: isDevelopment 
-      ? ['http://localhost:3008', 'http://localhost:3000', 'https://mokhtarelhenawy.online', 'https://www.mokhtarelhenawy.online']
+      ? ['http://localhost:3000', 'http://localhost:3007', 'http://127.0.0.1:3000', 'http://127.0.0.1:3007']
       : ['https://mokhtarelhenawy.online', 'https://www.mokhtarelhenawy.online'],
     
     // Database Configuration

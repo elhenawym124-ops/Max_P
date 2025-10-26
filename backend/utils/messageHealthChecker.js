@@ -1,7 +1,10 @@
+const { getSharedPrismaClient } = require('../services/sharedDatabase');
+
 class MessageHealthChecker {
   
   constructor() {
-    this.prisma = new PrismaClient();
+    // Use shared PrismaClient instead of creating new instance
+    this.prisma = getSharedPrismaClient();
   }
   
   /**
