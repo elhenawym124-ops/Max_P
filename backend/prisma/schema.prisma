@@ -1,0 +1,1684 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model Company {
+  id                    String                  @id @default(cuid())
+  name                  String
+  email                 String                  @unique
+  phone                 String?
+  website               String?
+  logo                  String?
+  address               String?
+  currency              String                  @default("EGP")
+  plan                  SubscriptionPlan        @default(BASIC)
+  planConfigurationId   String?
+  isActive              Boolean                 @default(true)
+  settings              String?                 @db.LongText
+  createdAt             DateTime                @default(now())
+  updatedAt             DateTime                @updatedAt
+  aiInteractions        AiInteraction[]
+  aiSettings            AiSettings?
+  appliedImprovements   AppliedImprovement[]
+  categories            Category[]
+  conversations         Conversation[]
+  conversationMemories  ConversationMemory[] // ✅ إضافة العلاقة مع ذاكرة المحادثات
+  conversationOutcomes  ConversationOutcome[]
+  customers             Customer[]
+  discoveredPatterns    DiscoveredPattern[]
+  facebookPages         FacebookPage[]
+  facebookComments      FacebookComment[] // NEW: Add relation to Facebook comments
+  integrations          Integration[]
+  learningData          LearningData[]
+  learningSettings      LearningSettings?
+  notifications         Notification[]
+  orders                Order[]
+  products              Product[]
+  responseEffectiveness ResponseEffectiveness[]
+  successPatterns       SuccessPattern[]
+  patternPerformance    PatternPerformance[]
+  patternUsage          PatternUsage[]
+  users                 User[]
+  userInvitations       UserInvitation[]
+  warehouses            Warehouse[]
+  planConfiguration     PlanConfiguration?      @relation(fields: [planConfigurationId], references: [id])
+  subscriptions         Subscription[]
+  invoices              Invoice[]
+  payments              Payment[]
+  geminiKeys            GeminiKey[] // 🔑 مفاتيح Gemini خاصة بكل شركة
+  systemPrompts         SystemPrompt[] // 📝 البرومبت النظامية خاصة بكل شركة
+  tasks                 Task[] // 📋 المهام خاصة بكل شركة
+  projects              Project[] // 📁 المشاريع خاصة بكل شركة
+  broadcastCampaigns    BroadcastCampaign[] // 📢 حملات البرودكاست
+  broadcastSettings     BroadcastSettings? // ⚙️ إعدادات البرودكاست
+  customerLists         CustomerList[] // 📋 قوائم العملاء
+  postResponseSettings  PostResponseSettings[] // 📝 إعدادات الردود التلقائية على المنشورات
+  pageResponseSettings  PageResponseSettings[] // 📄 إعدادات الردود على مستوى الصفحة
+  branches              Branch[] // 🏪 فروع المتجر
+  shippingZones         ShippingZone[] // 🚚 مناطق الشحن
+
+  @@map("companies")
+}
+
+model User {
+  id                    String           @id @default(cuid())
+  email                 String           @unique
+  password              String
+  firstName             String
+  lastName              String
+  avatar                String?
+  phone                 String?
+  role                  UserRole         @default(AGENT)
+  isActive              Boolean          @default(true)
+  isEmailVerified       Boolean          @default(false)
+  emailVerifiedAt       DateTime?
+  lastLoginAt           DateTime?
+  passwordChangedAt     DateTime?
+  resetPasswordToken    String?
+  resetPasswordExpires  DateTime?
+  companyId             String
+  createdAt             DateTime         @default(now())
+  updatedAt             DateTime         @updatedAt
+  activities            Activity[]
+  assignedConversations Conversation[]
+  customerNotes         CustomerNote[]
+  sentMessages          Message[]
+  notifications         Notification[]
+  sentInvitations       UserInvitation[]
+  company               Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  assignedTasks         Task[]           @relation("TaskAssignedTo")
+  createdTasks          Task[]           @relation("TaskCreatedBy")
+  managedProjects       Project[]
+
+  @@index([companyId], map: "users_companyId_fkey")
+  @@map("users")
+}
+
+model UserInvitation {
+  id         String           @id @default(cuid())
+  email      String
+  firstName  String
+  lastName   String
+  role       String           @default("AGENT")
+  token      String           @unique
+  status     InvitationStatus @default(PENDING)
+  invitedBy  String
+  companyId  String
+  expiresAt  DateTime
+  acceptedAt DateTime?
+  createdAt  DateTime         @default(now())
+  updatedAt  DateTime         @updatedAt
+
+  inviter User    @relation(fields: [invitedBy], references: [id], onDelete: Cascade)
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([companyId], map: "user_invitations_companyId_fkey")
+  @@index([token], map: "user_invitations_token_fkey")
+  @@map("user_invitations")
+}
+
+enum InvitationStatus {
+  PENDING
+  ACCEPTED
+  EXPIRED
+  CANCELLED
+}
+
+model Customer {
+  id                   String                @id @default(cuid())
+  firstName            String
+  lastName             String
+  email                String?
+  phone                String?
+  avatar               String?
+  facebookId           String?
+  whatsappId           String?
+  telegramId           String?
+  status               CustomerStatus        @default(LEAD)
+  tags                 String?
+  notes                String?
+  metadata             String?               @db.LongText
+  companyId            String
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  activities           Activity[]
+  aiInteractions       AiInteraction[]
+  conversations        Conversation[]
+  conversationOutcomes ConversationOutcome[]
+  notes_rel            CustomerNote[]
+  company              Company               @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  orders               Order[]
+
+  @@unique([facebookId, companyId], name: "customer_facebook_company")
+  @@unique([whatsappId, companyId], name: "customer_whatsapp_company")
+  @@unique([telegramId, companyId], name: "customer_telegram_company")
+  @@index([companyId], map: "customers_companyId_fkey")
+  @@index([facebookId], map: "customers_facebookId_idx")
+  @@index([status], map: "customers_status_idx")
+  @@index([companyId, status], map: "customers_company_status_idx")
+  @@map("customers")
+}
+
+model Conversation {
+  id                  String               @id @default(cuid())
+  customerId          String
+  assignedUserId      String?
+  channel             CommunicationChannel
+  status              ConversationStatus   @default(ACTIVE)
+  subject             String?
+  priority            Int                  @default(1)
+  tags                String?
+  lastMessageAt       DateTime?
+  lastMessagePreview  String?
+  isRead              Boolean              @default(false)
+  metadata            String?              @db.LongText
+  companyId           String
+  aiEnabled           Boolean              @default(true)
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+  assignedUser        User?                @relation(fields: [assignedUserId], references: [id])
+  company             Company              @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  customer            Customer             @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  messages            Message[]
+  orders              Order[]
+  broadcastRecipients BroadcastRecipient[]
+
+  @@index([assignedUserId], map: "conversations_assignedUserId_fkey")
+  @@index([companyId], map: "conversations_companyId_fkey")
+  @@index([customerId], map: "conversations_customerId_fkey")
+  @@index([lastMessageAt], map: "conversations_lastMessageAt_idx")
+  @@index([status], map: "conversations_status_idx")
+  @@index([companyId, lastMessageAt], map: "conversations_company_lastmsg_idx")
+  @@index([companyId, status, lastMessageAt], map: "conversations_company_status_lastmsg_idx")
+  @@map("conversations")
+}
+
+model Message {
+  id             String       @id @default(cuid())
+  conversationId String
+  senderId       String?
+  type           MessageType  @default(TEXT)
+  content        String       @db.LongText
+  attachments    String?      @db.LongText
+  metadata       String?      @db.LongText
+  isFromCustomer Boolean      @default(true)
+  isRead         Boolean      @default(false)
+  readAt         DateTime?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  sender         User?        @relation(fields: [senderId], references: [id])
+
+  @@index([conversationId], map: "messages_conversationId_fkey")
+  @@index([senderId], map: "messages_senderId_fkey")
+  @@index([createdAt], map: "messages_createdAt_idx")
+  @@index([isFromCustomer], map: "messages_isFromCustomer_idx")
+  @@index([conversationId, createdAt], map: "messages_conversation_created_idx")
+  @@index([conversationId, isFromCustomer, createdAt], map: "messages_conv_customer_created_idx")
+  @@map("messages")
+}
+
+model Category {
+  id          String     @id @default(cuid())
+  name        String
+  description String?
+  image       String?
+  parentId    String?
+  isActive    Boolean    @default(true)
+  sortOrder   Int        @default(0)
+  companyId   String
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+  company     Company    @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  parent      Category?  @relation("CategoryHierarchy", fields: [parentId], references: [id])
+  children    Category[] @relation("CategoryHierarchy")
+  products    Product[]
+
+  @@index([companyId], map: "categories_companyId_fkey")
+  @@index([parentId], map: "categories_parentId_fkey")
+  @@map("categories")
+}
+
+model Product {
+  id             String           @id @default(cuid())
+  name           String
+  description    String?
+  sku            String?          @unique
+  price          Decimal          @db.Decimal(10, 2)
+  comparePrice   Decimal?         @db.Decimal(10, 2)
+  cost           Decimal?         @db.Decimal(10, 2)
+  images         String?          @db.Text
+  stock          Int              @default(0)
+  trackInventory Boolean          @default(true)
+  weight         Decimal?         @db.Decimal(8, 2)
+  dimensions     String?          @db.LongText
+  categoryId     String?
+  isActive       Boolean          @default(true)
+  isFeatured     Boolean          @default(false)
+  tags           String?
+  metadata       String?          @db.LongText
+  companyId      String
+  barcode        String?
+  easyOrdersId   String?
+  easyOrdersUrl  String?
+  wooCommerceId  String?
+  wooCommerceUrl String?
+  source         String?          @default("manual")
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+  inventory      Inventory[]
+  orderItems     OrderItem[]
+  variants       ProductVariant[]
+  category       Category?        @relation(fields: [categoryId], references: [id])
+  company        Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  alerts         StockAlert[]
+  movements      StockMovement[]
+
+  @@index([categoryId], map: "products_categoryId_fkey")
+  @@index([companyId], map: "products_companyId_fkey")
+  @@map("products")
+}
+
+model ProductVariant {
+  id             String      @id @default(cuid())
+  productId      String
+  name           String
+  type           String      @default("color")
+  sku            String?     @unique
+  price          Decimal?    @db.Decimal(10, 2)
+  comparePrice   Decimal?    @db.Decimal(10, 2)
+  cost           Decimal?    @db.Decimal(10, 2)
+  images         String?     @db.Text
+  stock          Int         @default(0)
+  trackInventory Boolean     @default(true)
+  isActive       Boolean     @default(true)
+  sortOrder      Int         @default(0)
+  metadata       String?     @db.LongText
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+  orderItems     OrderItem[]
+  product        Product     @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([productId], map: "product_variants_productId_fkey")
+  @@map("product_variants")
+}
+
+model Order {
+  id                  String        @id @default(cuid())
+  orderNumber         String        @unique
+  customerId          String
+  conversationId      String?
+  status              OrderStatus   @default(PENDING)
+  paymentStatus       PaymentStatus @default(PENDING)
+  paymentMethod       PaymentMethod @default(CASH)
+  subtotal            Decimal       @db.Decimal(10, 2)
+  tax                 Decimal       @default(0.00) @db.Decimal(10, 2)
+  shipping            Decimal       @default(0.00) @db.Decimal(10, 2)
+  discount            Decimal       @default(0.00) @db.Decimal(10, 2)
+  total               Decimal       @db.Decimal(10, 2)
+  currency            String        @default("EGP") // 🔄 توحيد العملة مع باقي النظام
+  notes               String?
+  shippingAddress     String?       @db.LongText
+  billingAddress      String?       @db.LongText
+  customerName        String?
+  customerPhone       String?
+  customerEmail       String?
+  city                String?
+  customerAddress     String?
+  dataQuality         String?       @db.LongText
+  extractionMethod    String?       @default("ai_enhanced")
+  confidence          Float?
+  validationStatus    String?       @default("pending")
+  sourceType          String?       @default("ai_conversation")
+  extractionTimestamp DateTime?
+  metadata            String?       @db.LongText
+  companyId           String
+  createdAt           DateTime      @default(now())
+  updatedAt           DateTime      @updatedAt
+  items               OrderItem[]
+  company             Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  conversation        Conversation? @relation(fields: [conversationId], references: [id])
+  customer            Customer      @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@index([companyId], map: "orders_companyId_fkey")
+  @@index([customerId], map: "orders_customerId_fkey")
+  @@index([conversationId], map: "orders_conversationId_fkey")
+  @@map("orders")
+}
+
+model OrderItem {
+  id               String          @id @default(cuid())
+  orderId          String
+  productId        String?
+  quantity         Int
+  price            Decimal         @db.Decimal(10, 2)
+  total            Decimal         @db.Decimal(10, 2)
+  productName      String?
+  productColor     String?
+  productSize      String?
+  productSku       String?
+  metadata         String?         @db.LongText
+  variantId        String?
+  extractionSource String?         @default("ai")
+  confidence       Float?
+  order            Order           @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product          Product?        @relation(fields: [productId], references: [id], onDelete: Cascade)
+  variant          ProductVariant? @relation(fields: [variantId], references: [id])
+
+  @@index([orderId], map: "order_items_orderId_fkey")
+  @@index([productId], map: "order_items_productId_fkey")
+  @@index([variantId], map: "order_items_variantId_fkey")
+  @@map("order_items")
+}
+
+model Notification {
+  id        String    @id @default(cuid())
+  userId    String?
+  title     String
+  message   String
+  type      String    @default("info")
+  isRead    Boolean   @default(false)
+  readAt    DateTime?
+  data      String?   @db.LongText
+  companyId String
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  company   Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  user      User?     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([companyId], map: "notifications_companyId_fkey")
+  @@index([userId], map: "notifications_userId_fkey")
+  @@map("notifications")
+}
+
+model AINotification {
+  id        String   @id @default(cuid())
+  companyId String
+  type      String   // 'no_response', 'consecutive_failures', 'high_failure_rate', etc.
+  severity  String   @default("medium") // 'low', 'medium', 'high', 'critical'
+  title     String
+  message   String   @db.Text
+  metadata  String?  @db.LongText // JSON data
+  isRead    Boolean  @default(false)
+  readAt    DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([companyId])
+  @@index([isRead])
+  @@index([createdAt])
+  @@map("ai_notifications")
+}
+
+model Integration {
+  id          String    @id @default(cuid())
+  name        String
+  type        String
+  platform    String
+  externalId  String
+  accessToken String?   @db.Text
+  config      String    @db.LongText
+  settings    String?   @db.Text
+  status      String    @default("ACTIVE")
+  isActive    Boolean   @default(true)
+  lastSyncAt  DateTime?
+  companyId   String
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  company     Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@unique([companyId, platform, externalId])
+  @@map("integrations")
+}
+
+model AiSettings {
+  id                       String   @id @default(cuid())
+  companyId                String   @unique
+  promptTemplate           String?  @db.Text
+  autoReplyEnabled         Boolean  @default(false)
+  confidenceThreshold      Float    @default(0.7)
+  escalationRules          String?  @db.Text
+  createdAt                DateTime @default(now())
+  updatedAt                DateTime @updatedAt
+  autoCreateOrders         Boolean  @default(false)
+  autoSuggestProducts      Boolean  @default(true)
+  defaultProductId         String?
+  includeImages            Boolean  @default(true)
+  maxSuggestions           Int      @default(3)
+  modelSettings            String?  @db.Text
+  personalityPrompt        String?  @db.Text
+  responsePrompt           String?  @db.Text
+  memorySettings           String?  @db.Text
+  useAdvancedTools         Boolean  @default(false)
+  workingHours             String?  @db.Text
+  workingHoursEnabled      Boolean  @default(true)
+  maxRepliesPerCustomer    Int      @default(5)
+  multimodalEnabled        Boolean  @default(true)
+  ragEnabled               Boolean  @default(true)
+  qualityEvaluationEnabled Boolean  @default(true)
+  queueSettings            String?  @db.Text
+  company                  Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@map("ai_settings")
+}
+
+model AiInteraction {
+  id                        String   @id @default(cuid())
+  companyId                 String
+  customerId                String
+  userMessage               String   @db.Text
+  aiResponse                String   @db.Text
+  intent                    String?
+  sentiment                 String?
+  confidence                Float?
+  requiresHumanIntervention Boolean  @default(false)
+  metadata                  String?  @db.Text
+  createdAt                 DateTime @default(now())
+  modelUsed                 String?
+  responseTime              Int?
+  tokensUsed                Int?
+  company                   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  customer                  Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@index([companyId], map: "ai_interactions_companyId_fkey")
+  @@index([customerId], map: "ai_interactions_customerId_fkey")
+  @@map("ai_interactions")
+}
+
+model PromptTemplate {
+  id           String   @id @default(cuid())
+  name         String
+  category     String
+  businessType String?
+  description  String?
+  content      String   @db.Text
+  variables    String?  @db.Text
+  tags         String?  @db.Text
+  isActive     Boolean  @default(true)
+  usageCount   Int      @default(0)
+  rating       Float    @default(0)
+  createdBy    String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@map("prompt_templates")
+}
+
+// 📚 مكتبة البرومبتات الجاهزة من SuperAdmin
+model PromptLibrary {
+  id                String   @id @default(cuid())
+  name              String // اسم البرومبت
+  nameAr            String? // الاسم بالعربي
+  description       String   @db.Text // وصف البرومبت
+  descriptionAr     String?  @db.Text // الوصف بالعربي
+  category          String // التصنيف: sales, support, general, etc.
+  businessType      String? // نوع البيزنس: ecommerce, restaurant, etc.
+  promptContent     String   @db.LongText // محتوى البرومبت
+  personalityPrompt String?  @db.LongText // برومبت الشخصية
+  responsePrompt    String?  @db.LongText // برومبت الردود
+  variables         String?  @db.Text // المتغيرات المطلوبة (JSON)
+  tags              String?  @db.Text // تاجات للبحث
+  icon              String? // أيقونة البرومبت
+  previewImage      String? // صورة معاينة
+  isActive          Boolean  @default(true) // هل البرومبت نشط
+  isFeatured        Boolean  @default(false) // هل مميز
+  usageCount        Int      @default(0) // عدد مرات الاستخدام
+  rating            Float    @default(0) // التقييم
+  sortOrder         Int      @default(0) // ترتيب العرض
+  createdBy         String? // من أنشأه (superadmin)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@index([category])
+  @@index([isActive])
+  @@index([isFeatured])
+  @@index([businessType])
+  @@map("prompt_library")
+}
+
+model CustomerNote {
+  id         String   @id @default(cuid())
+  customerId String
+  authorId   String
+  content    String   @db.Text
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  author     User     @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  customer   Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@index([authorId], map: "customer_notes_authorId_fkey")
+  @@index([customerId], map: "customer_notes_customerId_fkey")
+  @@map("customer_notes")
+}
+
+model Activity {
+  id          String    @id @default(cuid())
+  userId      String?
+  customerId  String?
+  action      String
+  description String
+  metadata    String?   @db.LongText
+  ipAddress   String?
+  userAgent   String?
+  createdAt   DateTime  @default(now())
+  customer    Customer? @relation(fields: [customerId], references: [id])
+  user        User?     @relation(fields: [userId], references: [id])
+
+  @@index([customerId], map: "activities_customerId_fkey")
+  @@index([userId], map: "activities_userId_fkey")
+  @@map("activities")
+}
+
+model FacebookPage {
+  id              String    @id @default(cuid())
+  pageId          String    @unique
+  pageAccessToken String    @db.Text
+  pageName        String
+  companyId       String?
+  status          String    @default("connected")
+  connectedAt     DateTime  @default(now())
+  disconnectedAt  DateTime? // New field for tracking disconnection time
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  company         Company?  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([companyId], map: "facebook_pages_companyId_fkey")
+  @@map("facebook_pages")
+}
+
+model SkippedFacebookPage {
+  id                    String   @id @default(cuid())
+  pageId                String
+  pageName              String
+  reason                String   // السبب: already_connected_to_another_company
+  attemptedCompanyId    String   // الشركة اللي حاولت تربط الصفحة
+  connectedToCompanyId  String?  // الشركة المربوطة بيها حالياً
+  isResolved            Boolean  @default(false) // هل تم حل المشكلة
+  resolvedAt            DateTime?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  @@index([attemptedCompanyId])
+  @@index([isResolved])
+  @@index([createdAt])
+  @@map("skipped_facebook_pages")
+}
+
+model Warehouse {
+  id        String          @id @default(cuid())
+  name      String
+  location  String?
+  type      String          @default("main")
+  capacity  Int?
+  isActive  Boolean         @default(true)
+  companyId String
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+  inventory Inventory[]
+  alerts    StockAlert[]
+  movements StockMovement[]
+  company   Company         @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([companyId])
+  @@map("warehouses")
+}
+
+model Inventory {
+  id              String    @id @default(cuid())
+  productId       String
+  warehouseId     String
+  quantity        Int       @default(0)
+  reserved        Int       @default(0)
+  available       Int       @default(0)
+  minStock        Int       @default(0)
+  maxStock        Int?
+  reorderPoint    Int       @default(0)
+  reorderQuantity Int       @default(0)
+  cost            Decimal?  @db.Decimal(10, 2)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  product         Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
+  warehouse       Warehouse @relation(fields: [warehouseId], references: [id], onDelete: Cascade)
+
+  @@unique([productId, warehouseId])
+  @@index([productId])
+  @@index([warehouseId])
+  @@map("inventory")
+}
+
+model StockMovement {
+  id          String              @id @default(cuid())
+  productId   String
+  warehouseId String
+  type        StockMovementType
+  reason      StockMovementReason
+  quantity    Int
+  cost        Decimal?            @db.Decimal(10, 2)
+  reference   String?
+  notes       String?
+  userId      String?
+  userName    String?
+  createdAt   DateTime            @default(now())
+  product     Product             @relation(fields: [productId], references: [id], onDelete: Cascade)
+  warehouse   Warehouse           @relation(fields: [warehouseId], references: [id], onDelete: Cascade)
+
+  @@index([productId])
+  @@index([warehouseId])
+  @@index([createdAt])
+  @@map("stock_movements")
+}
+
+model StockAlert {
+  id              String        @id @default(cuid())
+  type            AlertType
+  priority        AlertPriority
+  productId       String
+  productName     String
+  warehouseId     String
+  warehouseName   String
+  message         String
+  currentStock    Int?
+  reorderPoint    Int?
+  reorderQuantity Int?
+  isRead          Boolean       @default(false)
+  createdAt       DateTime      @default(now())
+  product         Product       @relation(fields: [productId], references: [id], onDelete: Cascade)
+  warehouse       Warehouse     @relation(fields: [warehouseId], references: [id], onDelete: Cascade)
+
+  @@index([productId])
+  @@index([warehouseId])
+  @@index([isRead])
+  @@index([priority])
+  @@map("stock_alerts")
+}
+
+model ConversationMemory {
+  id             String   @id @default(cuid())
+  conversationId String
+  senderId       String
+  companyId      String // 🔐 إجباري بدون قيمة افتراضية - يجب تمرير companyId صحيح دائماً
+  userMessage    String
+  aiResponse     String
+  intent         String?
+  sentiment      String?
+  timestamp      DateTime @default(now())
+  metadata       String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  // العلاقة مع الشركة
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId])
+  @@index([senderId])
+  @@index([companyId]) // 🔐 فهرس للعزل الأمني
+  @@index([companyId, conversationId]) // ⚡ فهرس مركب للأداء
+  @@index([companyId, senderId]) // ⚡ فهرس مركب للأداء
+  @@index([timestamp])
+  @@map("conversation_memory")
+}
+
+model KnowledgeBase {
+  id        String   @id @default(cuid())
+  title     String
+  content   String
+  category  String
+  tags      String?
+  isActive  Boolean  @default(true)
+  priority  Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([category])
+  @@index([isActive])
+  @@map("knowledge_base")
+}
+
+model AiAnalytics {
+  id                    String   @id @default(cuid())
+  date                  DateTime @db.Date
+  totalMessages         Int      @default(0)
+  aiResponses           Int      @default(0)
+  humanHandoffs         Int      @default(0)
+  avgResponseTime       Float?
+  avgConfidence         Float?
+  topIntents            String?
+  sentimentDistribution String?
+  createdAt             DateTime @default(now())
+
+  @@index([date])
+  @@map("ai_analytics")
+}
+
+model MediaFile {
+  id             String   @id @default(cuid())
+  conversationId String
+  senderId       String
+  fileName       String
+  fileType       String
+  fileSize       Int?
+  fileUrl        String
+  analysis       String?
+  processed      Boolean  @default(false)
+  createdAt      DateTime @default(now())
+
+  @@index([conversationId])
+  @@index([fileType])
+  @@map("media_files")
+}
+
+model GeminiKey {
+  id                String           @id @default(cuid())
+  name              String
+  apiKey            String           @unique
+  model             String           @default("gemini-1.5-flash")
+  isActive          Boolean          @default(true)
+  usage             String           @default("{\"used\": 0, \"limit\": 1000000}")
+  currentUsage      Int              @default(0)
+  maxRequestsPerDay Int              @default(1500)
+  priority          Int              @default(1)
+  description       String?
+  companyId         String // 🏢 إضافة العزل بين الشركات
+  company           Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+  models            GeminiKeyModel[]
+
+  @@index([isActive, priority])
+  @@index([companyId, isActive])
+  @@map("gemini_keys")
+}
+
+model GeminiKeyModel {
+  id        String    @id @default(cuid())
+  keyId     String
+  model     String
+  usage     String    @default("{\"used\": 0, \"limit\": 1000000, \"resetDate\": null}")
+  isEnabled Boolean   @default(true)
+  priority  Int       @default(1)
+  lastUsed  DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  key       GeminiKey @relation(fields: [keyId], references: [id], onDelete: Cascade)
+
+  @@unique([keyId, model])
+  @@index([isEnabled, priority])
+  @@index([keyId, model])
+  @@map("gemini_key_models")
+}
+
+model SystemPrompt {
+  id        String   @id @default(cuid())
+  name      String
+  content   String   @db.LongText
+  category  String   @default("general")
+  isActive  Boolean  @default(false)
+  companyId String? // إضافة companyId للعزل الأمني
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // العلاقة مع الشركة
+  company Company? @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([companyId])
+  @@map("system_prompts")
+}
+
+model LearningData {
+  id             String   @id @default(cuid())
+  companyId      String
+  customerId     String?
+  conversationId String?
+  type           String
+  data           String?  @db.LongText
+  userMessage    String?  @db.LongText
+  aiResponse     String?  @db.LongText
+  intent         String?
+  sentiment      String?
+  processingTime Int?
+  ragDataUsed    Boolean  @default(false)
+  memoryUsed     Boolean  @default(false)
+  model          String?
+  confidence     Float?
+  outcome        String?
+  feedback       String?  @db.LongText
+  insights       String?  @db.LongText
+  metadata       String?  @db.LongText
+  createdAt      DateTime @default(now())
+  company        Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([companyId])
+  @@index([type])
+  @@index([createdAt])
+  @@index([confidence])
+  @@index([intent])
+  @@map("learning_data")
+}
+
+model DiscoveredPattern {
+  id                 String               @id @default(cuid())
+  companyId          String
+  patternType        String
+  pattern            String
+  description        String
+  confidence         Float
+  occurrences        Int                  @default(0)
+  contexts           String?              @db.LongText
+  actionableInsights String?              @db.LongText
+  impact             String?              @db.LongText
+  status             String               @default("discovered")
+  discoveredAt       DateTime             @default(now())
+  lastValidated      DateTime?
+  improvements       AppliedImprovement[]
+  company            Company              @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([companyId])
+  @@index([patternType])
+  @@index([status])
+  @@map("discovered_patterns")
+}
+
+model AppliedImprovement {
+  id                String             @id @default(cuid())
+  companyId         String
+  patternId         String?
+  type              String
+  description       String
+  implementation    String             @db.LongText
+  rolloutPercentage Int                @default(10)
+  status            String             @default("testing")
+  beforeMetrics     String?            @db.LongText
+  afterMetrics      String?            @db.LongText
+  improvementScore  Float?
+  createdAt         DateTime           @default(now())
+  lastEvaluated     DateTime?
+  company           Company            @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  pattern           DiscoveredPattern? @relation(fields: [patternId], references: [id])
+
+  @@index([companyId])
+  @@index([type])
+  @@index([status])
+  @@index([patternId], map: "applied_improvements_patternId_fkey")
+  @@map("applied_improvements")
+}
+
+model LearningSettings {
+  id                    String   @id @default(cuid())
+  companyId             String   @unique
+  enabled               Boolean  @default(true)
+  learningSpeed         String   @default("medium")
+  autoApplyImprovements Boolean  @default(false)
+  dataRetentionDays     Int      @default(90)
+  minimumSampleSize     Int      @default(50)
+  confidenceThreshold   Float    @default(0.8)
+  settings              String?  @db.LongText
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+  company               Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@map("learning_settings")
+}
+
+model SuccessPattern {
+  id              String    @id @default(cuid())
+  companyId       String
+  patternType     String // 'word_usage', 'timing', 'response_style', 'emotional_tone'
+  pattern         String    @db.LongText // JSON string with pattern details
+  description     String    @db.Text // تغيير من String إلى Text لدعم النصوص الطويلة
+  successRate     Float // نسبة النجاح (0-1)
+  sampleSize      Int // عدد العينات المستخدمة
+  confidenceLevel Float // مستوى الثقة (0-1)
+  isActive        Boolean   @default(true)
+  isApproved      Boolean   @default(false)
+  approvedBy      String?
+  approvedAt      DateTime?
+  metadata        String?   @db.LongText // معلومات إضافية
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  company         Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  // Relations
+  performance PatternPerformance[]
+  usage       PatternUsage[]
+
+  @@index([companyId])
+  @@index([patternType])
+  @@index([isActive])
+  @@index([isApproved])
+  @@index([successRate])
+  @@map("success_patterns")
+}
+
+model PatternPerformance {
+  id                 String    @id @default(cuid())
+  patternId          String
+  companyId          String
+  conversationId     String?
+  usageCount         Int       @default(0) // عدد مرات الاستخدام
+  successCount       Int       @default(0) // عدد مرات النجاح
+  failureCount       Int       @default(0) // عدد مرات الفشل
+  currentSuccessRate Float     @default(0) // معدل النجاح الحالي
+  lastUsedAt         DateTime? // آخر استخدام
+  performanceTrend   String    @default("stable") // "up", "down", "stable"
+  impactScore        Float     @default(0) // درجة التأثير (0-10)
+  roi                Float     @default(0) // عائد الاستثمار
+  metadata           String?   @db.LongText // معلومات إضافية
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  // Relations
+  pattern SuccessPattern @relation(fields: [patternId], references: [id], onDelete: Cascade)
+  company Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([patternId])
+  @@index([companyId])
+  @@index([currentSuccessRate])
+  @@index([lastUsedAt])
+  @@index([performanceTrend])
+  @@map("pattern_performance")
+}
+
+model PatternUsage {
+  id               String   @id @default(cuid())
+  patternId        String
+  conversationId   String
+  companyId        String
+  applied          Boolean  @default(true) // تم تطبيقه أم لا
+  effectiveness    Float? // فعالية التطبيق (0-1)
+  customerReaction String? // رد فعل العميل
+  outcomeImpact    String? // تأثير على النتيجة
+  responseTime     Int? // وقت الاستجابة
+  metadata         String?  @db.LongText
+  createdAt        DateTime @default(now())
+
+  // Relations
+  pattern SuccessPattern @relation(fields: [patternId], references: [id], onDelete: Cascade)
+  company Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([patternId])
+  @@index([conversationId])
+  @@index([companyId])
+  @@index([applied])
+  @@index([createdAt])
+  @@map("pattern_usage")
+}
+
+model ConversationOutcome {
+  id                   String   @id @default(cuid())
+  conversationId       String
+  customerId           String
+  companyId            String
+  outcome              String // 'purchase', 'abandoned', 'escalated', 'resolved'
+  outcomeValue         Float? // قيمة النتيجة (مبلغ الشراء مثلاً)
+  responseQuality      Float? // تقييم جودة الردود (0-10)
+  customerSatisfaction Float? // رضا العميل (0-5)
+  conversionTime       Int? // وقت التحويل بالدقائق
+  messageCount         Int? // عدد الرسائل في المحادثة
+  aiResponseCount      Int? // عدد ردود AI
+  humanHandoff         Boolean  @default(false)
+  metadata             String?  @db.LongText
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+  company              Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  customer             Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId])
+  @@index([companyId])
+  @@index([outcome])
+  @@index([createdAt])
+  @@map("conversation_outcomes")
+}
+
+model ResponseEffectiveness {
+  id                 String   @id @default(cuid())
+  companyId          String
+  messageId          String? // ID الرسالة الأصلية
+  conversationId     String
+  responseText       String   @db.LongText
+  responseType       String // 'greeting', 'product_info', 'price_quote', 'closing'
+  customerReaction   String? // 'positive', 'negative', 'neutral', 'purchase'
+  effectivenessScore Float // درجة الفعالية (0-10)
+  leadToPurchase     Boolean  @default(false)
+  responseTime       Int? // وقت الاستجابة بالميلي ثانية
+  wordCount          Int? // عدد الكلمات
+  sentimentScore     Float? // درجة المشاعر
+  keywords           String?  @db.LongText // الكلمات المفتاحية المستخدمة
+  metadata           String?  @db.LongText
+  createdAt          DateTime @default(now())
+  company            Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([companyId])
+  @@index([conversationId])
+  @@index([responseType])
+  @@index([effectivenessScore])
+  @@index([leadToPurchase])
+  @@index([createdAt])
+  @@map("response_effectiveness")
+}
+
+// Task Management Models
+model Task {
+  id             String       @id @default(cuid())
+  projectId      String?
+  title          String
+  description    String       @db.LongText
+  status         TaskStatus   @default(PENDING)
+  priority       TaskPriority @default(MEDIUM)
+  type           String       @default("general")
+  assignedTo     String
+  createdBy      String
+  dueDate        DateTime?
+  estimatedHours Int          @default(0)
+  actualHours    Int          @default(0)
+  progress       Int          @default(0) // 0-100
+  tags           Json?
+  dependencies   Json?
+  companyId      String
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  // Relations
+  project       Project? @relation(fields: [projectId], references: [id])
+  company       Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  assignedUser  User     @relation("TaskAssignedTo", fields: [assignedTo], references: [id])
+  createdByUser User     @relation("TaskCreatedBy", fields: [createdBy], references: [id])
+
+  @@index([companyId])
+  @@index([projectId])
+  @@index([assignedTo])
+  @@index([status])
+  @@index([priority])
+  @@index([dueDate])
+  @@map("tasks")
+}
+
+model Project {
+  id          String        @id @default(cuid())
+  name        String
+  description String        @db.LongText
+  status      ProjectStatus @default(PLANNING)
+  priority    TaskPriority  @default(MEDIUM)
+  startDate   DateTime?
+  endDate     DateTime?
+  budget      Decimal?      @db.Decimal(10, 2)
+  spentBudget Decimal?      @default(0.00) @db.Decimal(10, 2)
+  progress    Int           @default(0) // 0-100
+  managerId   String
+  teamMembers Json?
+  tags        Json?
+  companyId   String
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  // Relations
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  manager User    @relation(fields: [managerId], references: [id])
+  tasks   Task[]
+
+  @@index([companyId])
+  @@index([managerId])
+  @@index([status])
+  @@index([priority])
+  @@map("projects")
+}
+
+enum TaskStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum TaskPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum ProjectStatus {
+  PLANNING
+  ACTIVE
+  COMPLETED
+  ON_HOLD
+}
+
+enum UserRole {
+  SUPER_ADMIN
+  COMPANY_ADMIN
+  MANAGER
+  AGENT
+}
+
+enum SubscriptionPlan {
+  BASIC
+  PRO
+  ENTERPRISE
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  INACTIVE
+  CANCELLED
+  EXPIRED
+  TRIAL
+  SUSPENDED
+}
+
+enum InvoiceStatus {
+  DRAFT
+  SENT
+  PAID
+  OVERDUE
+  CANCELLED
+  REFUNDED
+}
+
+enum InvoiceType {
+  SUBSCRIPTION
+  ONE_TIME
+  UPGRADE
+  DOWNGRADE
+  REFUND
+}
+
+enum CustomerStatus {
+  LEAD
+  PROSPECT
+  CUSTOMER
+  VIP
+  INACTIVE
+}
+
+enum CommunicationChannel {
+  FACEBOOK
+  WHATSAPP
+  TELEGRAM
+  EMAIL
+  SMS
+  PHONE
+  WEBSITE
+}
+
+enum ConversationStatus {
+  ACTIVE
+  PENDING
+  RESOLVED
+  CLOSED
+}
+
+enum MessageType {
+  TEXT
+  IMAGE
+  VIDEO
+  AUDIO
+  FILE
+  LOCATION
+  STICKER
+  EMOJI
+  TEMPLATE
+}
+
+enum OrderStatus {
+  PENDING
+  CONFIRMED
+  PROCESSING
+  SHIPPED
+  DELIVERED
+  CANCELLED
+  REFUNDED
+}
+
+enum PaymentStatus {
+  PENDING
+  COMPLETED
+  FAILED
+  REFUNDED
+}
+
+enum PaymentMethod {
+  CASH
+  CREDIT_CARD
+  BANK_TRANSFER
+  PAYPAL
+  STRIPE
+}
+
+enum StockMovementType {
+  IN
+  OUT
+  ADJUSTMENT
+  TRANSFER
+  RETURN
+}
+
+enum StockMovementReason {
+  PURCHASE
+  SALE
+  DAMAGE
+  EXPIRED
+  LOST
+  FOUND
+  TRANSFER
+  RETURN
+  ADJUSTMENT
+}
+
+enum AlertPriority {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum AlertType {
+  LOW_STOCK
+  OUT_OF_STOCK
+  OVERSTOCK
+  EXPIRY_WARNING
+}
+
+model PlanConfiguration {
+  id            String    @id @default(cuid())
+  planType      String    @unique
+  price         Float
+  currency      String    @default("EGP")
+  billingCycle  String    @default("monthly")
+  features      Json
+  description   String?
+  descriptionEn String?
+  isActive      Boolean   @default(true)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  companies     Company[]
+
+  @@map("plan_configurations")
+}
+
+model Subscription {
+  id              String             @id @default(cuid())
+  companyId       String
+  planType        SubscriptionPlan
+  status          SubscriptionStatus @default(ACTIVE)
+  startDate       DateTime           @default(now())
+  endDate         DateTime?
+  nextBillingDate DateTime?
+  billingCycle    String             @default("monthly") // monthly, yearly
+  price           Float
+  currency        String             @default("EGP")
+  autoRenew       Boolean            @default(true)
+  trialEndDate    DateTime?
+  cancelledAt     DateTime?
+  cancelReason    String?
+  metadata        Json?
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+
+  // Relations
+  company  Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  invoices Invoice[]
+  payments Payment[]
+
+  @@map("subscriptions")
+}
+
+model Invoice {
+  id             String        @id @default(cuid())
+  invoiceNumber  String        @unique
+  subscriptionId String?
+  companyId      String
+  status         InvoiceStatus @default(DRAFT)
+  type           InvoiceType   @default(SUBSCRIPTION)
+  issueDate      DateTime      @default(now())
+  dueDate        DateTime
+  paidDate       DateTime?
+  subtotal       Float
+  taxAmount      Float         @default(0)
+  discountAmount Float         @default(0)
+  totalAmount    Float
+  currency       String        @default("EGP")
+  notes          String?
+  paymentTerms   String?       @default("Net 30")
+  metadata       Json?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  // Relations
+  company         Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  subscription    Subscription?    @relation(fields: [subscriptionId], references: [id])
+  items           InvoiceItem[]
+  payments        Payment[]
+  paymentReceipts PaymentReceipt[]
+
+  @@map("invoices")
+}
+
+model InvoiceItem {
+  id          String   @id @default(cuid())
+  invoiceId   String
+  description String
+  quantity    Float    @default(1)
+  unitPrice   Float
+  totalPrice  Float
+  metadata    Json?
+  createdAt   DateTime @default(now())
+
+  // Relations
+  invoice Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+
+  @@map("invoice_items")
+}
+
+model Payment {
+  id               String        @id @default(cuid())
+  paymentNumber    String        @unique
+  invoiceId        String?
+  subscriptionId   String?
+  companyId        String
+  amount           Float
+  currency         String        @default("EGP")
+  status           PaymentStatus @default(PENDING)
+  method           PaymentMethod @default(BANK_TRANSFER)
+  gateway          String? // stripe, paypal, etc.
+  gatewayPaymentId String?
+  transactionId    String?
+  paidAt           DateTime?
+  failedAt         DateTime?
+  failureReason    String?
+  metadata         Json?
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+
+  // Relations
+  company      Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  invoice      Invoice?      @relation(fields: [invoiceId], references: [id])
+  subscription Subscription? @relation(fields: [subscriptionId], references: [id])
+
+  @@map("payments")
+}
+
+// جدول أرقام المحافظ
+model WalletNumber {
+  id        String   @id @default(cuid())
+  name      String // "فودافون كاش"
+  number    String // "01234567890"
+  isActive  Boolean  @default(true)
+  icon      String // "📱"
+  color     String // "#E60026"
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  paymentReceipts PaymentReceipt[]
+
+  @@map("wallet_numbers")
+}
+
+// جدول إيصالات الدفع
+model PaymentReceipt {
+  id             String    @id @default(cuid())
+  invoiceId      String
+  walletNumberId String
+  receiptImage   String // مسار الصورة
+  status         String    @default("PENDING") // PENDING, APPROVED, REJECTED
+  submittedAt    DateTime  @default(now())
+  reviewedAt     DateTime?
+  reviewedBy     String? // معرف المراجع
+  notes          String? // ملاحظات المراجع
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  // Relations
+  invoice      Invoice      @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  walletNumber WalletNumber @relation(fields: [walletNumberId], references: [id], onDelete: Cascade)
+
+  @@map("payment_receipts")
+}
+
+enum NotificationType {
+  ERROR
+  WARNING
+  INFO
+  SUCCESS
+  SYSTEM_ALERT
+}
+
+model SystemSettings {
+  id               String    @id @default(cuid())
+  systemName       String    @unique
+  displayName      String
+  description      String?
+  category         String    @default("general")
+  isEnabled        Boolean   @default(true)
+  config           Json?
+  resourceUsage    Json?
+  lastStatusChange DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  @@map("system_settings")
+}
+
+// ==================== BROADCAST MODELS ====================
+
+model BroadcastCampaign {
+  id             String    @id @default(cuid())
+  name           String
+  message        String    @db.LongText
+  targetAudience String
+  scheduledAt    DateTime?
+  sentAt         DateTime?
+  tags           Json?
+  priority       String    @default("medium")
+  includeImages  Boolean   @default(false)
+  trackClicks    Boolean   @default(true)
+  autoResend     Boolean   @default(false)
+  images         Json?
+  status         String    @default("draft")
+  recipientCount Int       @default(0)
+  sentCount      Int       @default(0)
+  deliveredCount Int       @default(0)
+  openedCount    Int       @default(0)
+  clickedCount   Int       @default(0)
+  failedCount    Int       @default(0)
+  companyId      String
+  creatorId      String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  company    Company              @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  recipients BroadcastRecipient[]
+
+  @@index([companyId])
+  @@index([status])
+  @@index([scheduledAt])
+  @@map("broadcast_campaigns")
+}
+
+model BroadcastSettings {
+  id                           String   @id @default(cuid())
+  companyId                    String   @unique
+  defaultSendTime              String   @default("10:00")
+  timezone                     String   @default("Asia/Riyadh")
+  maxRecipientsPerCampaign     Int      @default(5000)
+  maxCampaignsPerDay           Int      @default(10)
+  enableDeliveryReports        Boolean  @default(true)
+  enableOpenTracking           Boolean  @default(true)
+  enableClickTracking          Boolean  @default(true)
+  enableUnsubscribeTracking    Boolean  @default(true)
+  notifyOnCampaignSent         Boolean  @default(true)
+  notifyOnHighUnsubscribeRate  Boolean  @default(true)
+  notifyOnLowDeliveryRate      Boolean  @default(true)
+  adminEmail                   String?
+  requireApprovalForHighVolume Boolean  @default(false)
+  highVolumeThreshold          Int      @default(1000)
+  enableContentFiltering       Boolean  @default(false)
+  blockedWords                 Json?
+  messagesPerMinute            Int      @default(60)
+  messagesPerHour              Int      @default(1000)
+  messagesPerDay               Int      @default(10000)
+  defaultFooter                String?  @db.Text
+  unsubscribeText              String   @default("للإلغاء اكتب STOP")
+  companyName                  String?
+  companyAddress               String?
+  createdAt                    DateTime @default(now())
+  updatedAt                    DateTime @updatedAt
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@map("broadcast_settings")
+}
+
+model BroadcastRecipient {
+  id              String    @id @default(cuid())
+  campaignId      String
+  conversationId  String
+  customerPhone   String
+  customerName    String?
+  messengerUserId String?
+  status          String    @default("pending")
+  sentAt          DateTime?
+  deliveredAt     DateTime?
+  openedAt        DateTime?
+  clickedAt       DateTime?
+  repliedAt       DateTime?
+  failureReason   String?   @db.Text
+  messageId       String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  campaign     BroadcastCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  conversation Conversation      @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([campaignId])
+  @@index([conversationId])
+  @@index([status])
+  @@map("broadcast_recipients")
+}
+
+model CustomerList {
+  id          String   @id @default(cuid())
+  name        String
+  description String?  @db.Text
+  criteria    Json
+  count       Int      @default(0)
+  isDefault   Boolean  @default(false)
+  companyId   String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([companyId])
+  @@map("customer_lists")
+}
+
+// NEW: Model for Facebook Comments
+model FacebookComment {
+  id          String    @id @default(cuid())
+  commentId   String    @unique
+  postId      String
+  senderId    String
+  senderName  String
+  message     String    @db.Text
+  response    String?   @db.Text
+  createdTime DateTime
+  respondedAt DateTime?
+  pageId      String?
+  companyId   String? // Make it optional like FacebookPage
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  company Company? @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([commentId])
+  @@index([postId])
+  @@index([senderId])
+  @@index([companyId])
+  @@index([createdTime])
+  @@map("facebook_comments")
+}
+
+// NEW: Model for Post Response Settings
+model PostResponseSettings {
+  id                    String   @id @default(cuid())
+  postId                String
+  companyId             String
+  responseMethod        String // 'ai', 'fixed', 'manual'
+  commentMessages       String?  @db.LongText // JSON array of comment response variations
+  fixedMessengerMessage String?  @db.LongText // الرسالة الثابتة في الماسنجر
+  aiPrompt              String?  @db.LongText // البرومبت الخاص بالـ AI لهذا البوست
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@unique([postId, companyId])
+  @@index([postId])
+  @@index([companyId])
+  @@map("post_response_settings")
+}
+
+// NEW: Model for Page Response Settings (إعدادات على مستوى الصفحة)
+model PageResponseSettings {
+  id                    String   @id @default(cuid())
+  pageId                String
+  companyId             String
+  responseMethod        String // 'ai', 'fixed', 'manual'
+  commentMessages       String?  @db.LongText // JSON array of comment response variations
+  fixedMessengerMessage String?  @db.LongText // الرسالة الثابتة في الماسنجر
+  aiPrompt              String?  @db.LongText // البرومبت الخاص بالـ AI لهذه الصفحة
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@unique([pageId, companyId])
+  @@index([pageId])
+  @@index([companyId])
+  @@map("page_response_settings")
+}
+
+// 🏪 Model for Store Branches
+model Branch {
+  id           String   @id @default(cuid())
+  name         String
+  address      String
+  city         String
+  phone        String
+  email        String?
+  workingHours String?
+  isActive     Boolean  @default(true)
+  companyId    String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([companyId])
+  @@index([isActive])
+  @@map("branches")
+}
+
+// 🚚 Model for Shipping Zones
+model ShippingZone {
+  id           String   @id @default(cuid())
+  governorates Json // Array of governorate name variations stored as JSON
+  price        Decimal  @db.Decimal(10, 2)
+  deliveryTime String // e.g., "1-2 أيام"
+  isActive     Boolean  @default(true)
+  companyId    String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([companyId])
+  @@index([isActive])
+  @@map("shipping_zones")
+}

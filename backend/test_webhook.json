@@ -1,0 +1,20 @@
+{
+  "object": "page",
+  "entry": [{
+    "id": "test-page",
+    "time": 1234567890,
+    "messaging": [{
+      "sender": {
+        "id": "test-user-123"
+      },
+      "recipient": {
+        "id": "test-page"
+      },
+      "timestamp": 1234567890,
+      "message": {
+        "mid": "test-mid",
+        "text": "Hello AI, test message"
+      }
+    }]
+  }]
+}
