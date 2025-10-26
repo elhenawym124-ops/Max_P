@@ -304,19 +304,9 @@ const ConversationsImprovedFixedContent: React.FC = () => {
           }
         }
 
-        // تشخيص مؤقت - فحص sender data بالتفصيل
-        if (!msg.isFromCustomer) {
-          console.log(`🔍 [SENDER-DEBUG] Message ${msg.id}:`, {
-            content: msg.content.substring(0, 50) + '...',
-            '📦 RAW sender object': msg.sender,
-            '🔑 sender?.id': msg.sender?.id,
-            '👤 sender?.name': msg.sender?.name,
-            '👤 sender?.firstName': msg.sender?.firstName,
-            '👤 sender?.lastName': msg.sender?.lastName,
-            '🤖 isAiGenerated': isAiGenerated,
-            '📝 type': msg.type,
-            '💾 hasMetadata': !!msg.metadata
-          });
+        // Debug: Log sender info for employee messages
+        if (!msg.isFromCustomer && msg.sender) {
+          console.log(`👤 [SENDER] ${msg.sender.name} sent: "${msg.content.substring(0, 30)}..."`);
         }
 
         return {

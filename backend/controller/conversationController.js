@@ -204,9 +204,9 @@ const postMessageConverstation = async (req, res) => {
       }
     });
 
-    // ⚡ OPTIMIZATION: لا نحفظ الرسالة هنا - سيتم حفظها تلقائياً عند استقبال echo من Facebook
-    // هذا يمنع التكرار ويضمن أن الرسالة تُحفظ فقط إذا تم إرسالها بنجاح
-    console.log(`⏳ [SEND] Sending message to Facebook - will be saved via echo...`);
+    // ✅ حفظ الرسالة مع معلومات المرسل (الموظف)
+    const userId = req.user?.id; // Get the user ID from the authenticated request
+    console.log(`👤 [SEND] Sending message from user: ${userId}`);
 
     // 🔧 FIX: Invalidate cache for this conversation to ensure fresh data on refresh
     if (conversation && conversation.companyId) {
@@ -365,7 +365,42 @@ const postMessageConverstation = async (req, res) => {
       // Don't fail the whole operation if Facebook sending fails
     }
 
-    console.log(`✅ Manual reply sent to Facebook - waiting for echo to save`);
+    // ✅ حفظ الرسالة في قاعدة البيانات مع معلومات المرسل
+    let savedMessage = null;
+    if (facebookSent && userId) {
+      try {
+        savedMessage = await prisma.message.create({
+          data: {
+            content: message,
+            type: 'TEXT',
+            conversationId: id,
+            senderId: userId, // ✅ حفظ معرف الموظف المرسل
+            isFromCustomer: false,
+            metadata: JSON.stringify({
+              platform: 'facebook',
+              source: 'manual_reply',
+              facebookMessageId: facebookMessageId,
+              sentViaApi: true,
+              timestamp: new Date()
+            })
+          },
+          include: {
+            sender: {
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true
+              }
+            }
+          }
+        });
+        console.log(`💾 [SAVE] Message saved with sender: ${savedMessage.sender?.firstName} ${savedMessage.sender?.lastName}`);
+      } catch (saveError) {
+        console.error(`❌ [SAVE] Failed to save message:`, saveError.message);
+      }
+    }
+
+    console.log(`✅ Manual reply sent to Facebook and saved to database`);
 
     res.json({
       success: true,
@@ -376,15 +411,18 @@ const postMessageConverstation = async (req, res) => {
         isFromCustomer: false,
         isFacebookReply: true,
         facebookMessageId: facebookMessageId,
+        senderId: userId,
+        senderName: savedMessage?.sender ? `${savedMessage.sender.firstName} ${savedMessage.sender.lastName}` : null,
         sentAt: new Date()
       },
-      message: facebookSent ? 'Reply sent successfully - message will appear when echo is received' : 'Failed to send to Facebook',
+      message: facebookSent ? 'Reply sent successfully and saved' : 'Failed to send to Facebook',
       facebookSent: facebookSent,
       facebookError: facebookErrorDetails,
       debug: {
         hasCustomer: !!conversation?.customer,
         hasFacebookId: !!conversation?.customer?.facebookId,
-        facebookSent: facebookSent
+        facebookSent: facebookSent,
+        messageSaved: !!savedMessage
       }
     });
 
