@@ -304,17 +304,18 @@ const ConversationsImprovedFixedContent: React.FC = () => {
           }
         }
 
-        // تشخيص مؤقت
+        // تشخيص مؤقت - فحص sender data بالتفصيل
         if (!msg.isFromCustomer) {
-          console.log(`🔍 [MESSAGE-DEBUG] Message ${msg.id}:`, {
+          console.log(`🔍 [SENDER-DEBUG] Message ${msg.id}:`, {
             content: msg.content.substring(0, 50) + '...',
-            type: msg.type,
-            isAiGenerated: isAiGenerated,
-            hasMetadata: !!msg.metadata,
-            fileUrl: msg.fileUrl,
-            fileName: msg.fileName,
-            hasAttachments: !!(msg.attachments && msg.attachments.length > 0),
-            metadata: msg.metadata ? (typeof msg.metadata === 'string' ? msg.metadata.substring(0, 100) + '...' : JSON.stringify(msg.metadata).substring(0, 100) + '...') : null
+            '📦 RAW sender object': msg.sender,
+            '🔑 sender?.id': msg.sender?.id,
+            '👤 sender?.name': msg.sender?.name,
+            '👤 sender?.firstName': msg.sender?.firstName,
+            '👤 sender?.lastName': msg.sender?.lastName,
+            '🤖 isAiGenerated': isAiGenerated,
+            '📝 type': msg.type,
+            '💾 hasMetadata': !!msg.metadata
           });
         }
 
