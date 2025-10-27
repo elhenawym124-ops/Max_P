@@ -458,8 +458,10 @@ setInterval(async () => {
   }
 }, 5 * 60 * 1000); // Check every 5 minutes
 
-// 🔥 NEW: Periodic connection health check and auto-reconnect
-// This prevents "Engine is not yet connected" errors
+// 🔥 DISABLED: Periodic connection health check
+// This was creating too many connections (120/hour just from pings)
+// Connection will be established on-demand when queries are made
+/*
 setInterval(async () => {
   if (!sharedPrismaInstance) return;
   if (isInConnectionLimitCooldown()) return;
@@ -492,6 +494,7 @@ setInterval(async () => {
     }
   }
 }, 30 * 1000); // Check every 30 seconds
+*/
 
 // Monitor stats in development
 if (process.env.NODE_ENV === 'development') {

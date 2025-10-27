@@ -70,6 +70,32 @@ interface PrioritySettings {
   conflictReports: boolean;
 }
 
+interface AdvancedAISettings {
+  // إعدادات التوليد
+  temperature: number;
+  topP: number;
+  topK: number;
+  maxTokens: number;
+  responseStyle: 'formal' | 'casual' | 'balanced';
+  
+  // إعدادات السلوك الذكي
+  enableDiversityCheck: boolean;
+  enableToneAdaptation: boolean;
+  enableEmotionalResponse: boolean;
+  enableSmartSuggestions: boolean;
+  enableLongTermMemory: boolean;
+  
+  // إعدادات متقدمة
+  maxMessagesPerConversation: number;
+  memoryRetentionDays: number;
+  enablePatternApplication: boolean;
+  patternPriority: 'prompt' | 'balanced' | 'patterns';
+  
+  // إعدادات الجودة
+  minQualityScore: number;
+  enableLowQualityAlerts: boolean;
+}
+
 interface GeminiKeyModel {
   id: string;
   model: string;
@@ -324,6 +350,28 @@ const AIManagement: React.FC = () => {
   const [queueLoading, setQueueLoading] = useState(false);
   const [queueSaving, setQueueSaving] = useState(false);
 
+  // ✨ Advanced AI Settings State (NEW)
+  const [advancedSettings, setAdvancedSettings] = useState<AdvancedAISettings>({
+    temperature: 0.7,
+    topP: 0.9,
+    topK: 40,
+    maxTokens: 1024,
+    responseStyle: 'balanced',
+    enableDiversityCheck: true,
+    enableToneAdaptation: true,
+    enableEmotionalResponse: true,
+    enableSmartSuggestions: false,
+    enableLongTermMemory: false,
+    maxMessagesPerConversation: 50,
+    memoryRetentionDays: 30,
+    enablePatternApplication: true,
+    patternPriority: 'balanced',
+    minQualityScore: 70,
+    enableLowQualityAlerts: true,
+  });
+  const [advancedLoading, setAdvancedLoading] = useState(false);
+  const [advancedSaving, setAdvancedSaving] = useState(false);
+
   const loadAISettings = async () => {
     try {
       if (!isAuthenticated) {
@@ -356,6 +404,74 @@ const AIManagement: React.FC = () => {
     }
   };
 
+  // ✨ Load Advanced AI Settings (NEW)
+  const loadAdvancedSettings = async () => {
+    try {
+      setAdvancedLoading(true);
+      const response = await companyAwareApi.get('/settings/ai');
+      
+      if (response.data.success) {
+        const settings = response.data.settings;
+        setAdvancedSettings({
+          temperature: settings.aiTemperature || 0.7,
+          topP: settings.aiTopP || 0.9,
+          topK: settings.aiTopK || 40,
+          maxTokens: settings.aiMaxTokens || 1024,
+          responseStyle: settings.aiResponseStyle || 'balanced',
+          enableDiversityCheck: settings.enableDiversityCheck !== false,
+          enableToneAdaptation: settings.enableToneAdaptation !== false,
+          enableEmotionalResponse: settings.enableEmotionalResponse !== false,
+          enableSmartSuggestions: settings.enableSmartSuggestions || false,
+          enableLongTermMemory: settings.enableLongTermMemory || false,
+          maxMessagesPerConversation: settings.maxMessagesPerConversation || 50,
+          memoryRetentionDays: settings.memoryRetentionDays || 30,
+          enablePatternApplication: settings.enablePatternApplication !== false,
+          patternPriority: settings.patternPriority || 'balanced',
+          minQualityScore: settings.minQualityScore || 70,
+          enableLowQualityAlerts: settings.enableLowQualityAlerts !== false,
+        });
+      }
+    } catch (error) {
+      console.error('Error loading advanced settings:', error);
+    } finally {
+      setAdvancedLoading(false);
+    }
+  };
+
+  // ✨ Save Advanced AI Settings (NEW)
+  const saveAdvancedSettings = async () => {
+    try {
+      setAdvancedSaving(true);
+      const response = await companyAwareApi.put('/settings/ai', {
+        aiTemperature: advancedSettings.temperature,
+        aiTopP: advancedSettings.topP,
+        aiTopK: advancedSettings.topK,
+        aiMaxTokens: advancedSettings.maxTokens,
+        aiResponseStyle: advancedSettings.responseStyle,
+        enableDiversityCheck: advancedSettings.enableDiversityCheck,
+        enableToneAdaptation: advancedSettings.enableToneAdaptation,
+        enableEmotionalResponse: advancedSettings.enableEmotionalResponse,
+        enableSmartSuggestions: advancedSettings.enableSmartSuggestions,
+        enableLongTermMemory: advancedSettings.enableLongTermMemory,
+        maxMessagesPerConversation: advancedSettings.maxMessagesPerConversation,
+        memoryRetentionDays: advancedSettings.memoryRetentionDays,
+        enablePatternApplication: advancedSettings.enablePatternApplication,
+        patternPriority: advancedSettings.patternPriority,
+        minQualityScore: advancedSettings.minQualityScore,
+        enableLowQualityAlerts: advancedSettings.enableLowQualityAlerts,
+      });
+
+      if (response.data.success) {
+        alert('✅ تم حفظ الإعدادات المتقدمة بنجاح');
+      }
+    } catch (error) {
+      console.error('Error saving advanced settings:', error);
+      alert('❌ خطأ في حفظ الإعدادات المتقدمة');
+    } finally {
+      setAdvancedSaving(false);
+    }
+  };
+
   useEffect(() => {
     // Only load data if user is authenticated
     if (isAuthenticated && user) {
@@ -369,6 +485,7 @@ const AIManagement: React.FC = () => {
       loadAISettings();
       loadAIPrompts(); // Load AI Settings Prompts
       loadQueueSettings(); // Load Queue Settings
+      loadAdvancedSettings(); // ✨ Load Advanced AI Settings
     }
   }, [isAuthenticated, user]);
 
@@ -1414,6 +1531,7 @@ const AIManagement: React.FC = () => {
         <nav className="-mb-px flex space-x-8 overflow-x-auto">
           {[
             { id: 'ai-settings', name: '🤖 شخصية المساعد', icon: BoltIcon },
+            { id: 'advanced-settings', name: '🎛️ إعدادات متقدمة', icon: CogIcon },
             { id: 'gemini', name: '🔑 مفاتيح Gemini', icon: CogIcon },
             { id: 'prompts', name: '💬 البرومبت المتقدم', icon: BoltIcon },
             { id: 'priority', name: '🎯 أولوية النظام', icon: CogIcon },
@@ -1548,6 +1666,382 @@ const AIManagement: React.FC = () => {
                     <li>• اذكر العملة المستخدمة في شركتك</li>
                     <li>• ضع قواعد واضحة للتعامل مع الاستفسارات</li>
                   </ul>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {activeTab === 'advanced-settings' && (
+        <div className="bg-white rounded-lg shadow">
+          <div className="px-6 py-4 border-b border-gray-200">
+            <h3 className="text-lg font-medium text-gray-900">🎛️ الإعدادات المتقدمة للذكاء الاصطناعي</h3>
+            <p className="text-sm text-gray-600 mt-1">
+              تحكم دقيق في سلوك وأسلوب الردود الآلية لجعلها أكثر طبيعية واحترافية
+            </p>
+          </div>
+
+          <div className="p-6">
+            {advancedLoading ? (
+              <div className="text-center py-8">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+                <p className="text-gray-600 mt-2">جاري تحميل الإعدادات...</p>
+              </div>
+            ) : (
+              <div className="space-y-8">
+                
+                {/* ===== SECTION 1: إعدادات التوليد ===== */}
+                <div className="border-b pb-8">
+                  <h4 className="text-xl font-semibold mb-4 flex items-center gap-2">
+                    ⚙️ إعدادات توليد الردود
+                  </h4>
+                  <p className="text-gray-600 mb-6 text-sm">
+                    تحكم في مستوى الإبداع والتنوع في الردود المولدة
+                  </p>
+
+                  {/* Temperature */}
+                  <div className="space-y-3 mb-6">
+                    <div className="flex justify-between items-center">
+                      <label className="font-medium text-gray-700 flex items-center gap-2">
+                        📊 مستوى الإبداع (Temperature)
+                        <span className="text-xs text-gray-500 font-normal">
+                          كلما زاد الرقم، الردود تكون أكثر تنوعاً
+                        </span>
+                      </label>
+                      <span className="px-3 py-1 bg-blue-100 text-blue-800 rounded-full font-mono text-sm">
+                        {advancedSettings.temperature.toFixed(1)}
+                      </span>
+                    </div>
+                    <input
+                      type="range"
+                      min="0"
+                      max="1"
+                      step="0.1"
+                      value={advancedSettings.temperature}
+                      onChange={(e) => setAdvancedSettings(prev => ({ ...prev, temperature: parseFloat(e.target.value) }))}
+                      className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                    />
+                    <div className="flex justify-between text-xs text-gray-500">
+                      <span>0.0 - دقيق (قد يكرر)</span>
+                      <span>0.5 - متوازن</span>
+                      <span>1.0 - إبداعي (متنوع)</span>
+                    </div>
+                  </div>
+
+                  {/* Top P */}
+                  <div className="space-y-3 mb-6">
+                    <div className="flex justify-between items-center">
+                      <label className="font-medium text-gray-700 flex items-center gap-2">
+                        🎯 التنوع في الاختيارات (Top P)
+                        <span className="text-xs text-gray-500 font-normal">
+                          يتحكم في تنوع الكلمات المستخدمة
+                        </span>
+                      </label>
+                      <span className="px-3 py-1 bg-green-100 text-green-800 rounded-full font-mono text-sm">
+                        {advancedSettings.topP.toFixed(2)}
+                      </span>
+                    </div>
+                    <input
+                      type="range"
+                      min="0"
+                      max="1"
+                      step="0.05"
+                      value={advancedSettings.topP}
+                      onChange={(e) => setAdvancedSettings(prev => ({ ...prev, topP: parseFloat(e.target.value) }))}
+                      className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                    />
+                    <div className="flex justify-between text-xs text-gray-500">
+                      <span>محدود</span>
+                      <span>متنوع</span>
+                    </div>
+                  </div>
+
+                  {/* Top K */}
+                  <div className="space-y-3 mb-6">
+                    <div className="flex justify-between items-center">
+                      <label className="font-medium text-gray-700 flex items-center gap-2">
+                        🔢 عدد الخيارات (Top K)
+                        <span className="text-xs text-gray-500 font-normal">
+                          عدد الكلمات المرشحة في كل خطوة
+                        </span>
+                      </label>
+                      <span className="px-3 py-1 bg-purple-100 text-purple-800 rounded-full font-mono text-sm">
+                        {advancedSettings.topK}
+                      </span>
+                    </div>
+                    <input
+                      type="range"
+                      min="1"
+                      max="100"
+                      step="1"
+                      value={advancedSettings.topK}
+                      onChange={(e) => setAdvancedSettings(prev => ({ ...prev, topK: parseInt(e.target.value) }))}
+                      className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                    />
+                    <div className="flex justify-between text-xs text-gray-500">
+                      <span>1 - قليل</span>
+                      <span>50</span>
+                      <span>100 - كثير</span>
+                    </div>
+                  </div>
+
+                  {/* Max Tokens */}
+                  <div className="space-y-3 mb-6">
+                    <div className="flex justify-between items-center">
+                      <label className="font-medium text-gray-700 flex items-center gap-2">
+                        📏 الحد الأقصى لطول الرد
+                        <span className="text-xs text-gray-500 font-normal">
+                          أطول رد ممكن بالكلمات
+                        </span>
+                      </label>
+                      <span className="px-3 py-1 bg-orange-100 text-orange-800 rounded-full font-mono text-sm">
+                        {advancedSettings.maxTokens}
+                      </span>
+                    </div>
+                    <input
+                      type="range"
+                      min="256"
+                      max="4096"
+                      step="128"
+                      value={advancedSettings.maxTokens}
+                      onChange={(e) => setAdvancedSettings(prev => ({ ...prev, maxTokens: parseInt(e.target.value) }))}
+                      className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                    />
+                    <div className="flex justify-between text-xs text-gray-500">
+                      <span>256 - قصير</span>
+                      <span>1024 - متوسط</span>
+                      <span>4096 - طويل</span>
+                    </div>
+                  </div>
+
+                  {/* Response Style */}
+                  <div className="space-y-3">
+                    <label className="font-medium text-gray-700">
+                      🎨 أسلوب الردود
+                    </label>
+                    <div className="grid grid-cols-3 gap-3">
+                      {['formal', 'casual', 'balanced'].map((style) => (
+                        <button
+                          key={style}
+                          onClick={() => setAdvancedSettings(prev => ({ ...prev, responseStyle: style as any }))}
+                          className={`px-4 py-3 rounded-lg border-2 transition ${
+                            advancedSettings.responseStyle === style
+                              ? 'border-blue-600 bg-blue-50 text-blue-700'
+                              : 'border-gray-200 hover:border-gray-300'
+                          }`}
+                        >
+                          {style === 'formal' && '📝 رسمي'}
+                          {style === 'casual' && '😊 ودود'}
+                          {style === 'balanced' && '⚖️ متوازن'}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                {/* ===== SECTION 2: إعدادات السلوك ===== */}
+                <div className="border-b pb-8">
+                  <h4 className="text-xl font-semibold mb-4 flex items-center gap-2">
+                    🎭 إعدادات السلوك الذكي
+                  </h4>
+                  <p className="text-gray-600 mb-6 text-sm">
+                    ميزات ذكية لجعل الردود أكثر طبيعية وتكيفاً
+                  </p>
+
+                  <div className="space-y-4">
+                    {[
+                      { key: 'enableDiversityCheck', label: '🔄 منع التكرار', desc: 'تجنب الردود المتشابهة والمكررة' },
+                      { key: 'enableToneAdaptation', label: '🎯 التكيف مع أسلوب العميل', desc: 'مطابقة نبرة ولغة العميل' },
+                      { key: 'enableEmotionalResponse', label: '💙 الردود العاطفية', desc: 'التفاعل مع مشاعر العميل' },
+                      { key: 'enableSmartSuggestions', label: '💡 الاقتراحات الذكية', desc: 'تقديم اقتراحات ذكية للعميل' },
+                      { key: 'enableLongTermMemory', label: '🧠 الذاكرة طويلة المدى', desc: 'تذكر المحادثات السابقة' },
+                    ].map((feature) => (
+                      <div key={feature.key} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+                        <div className="flex-1">
+                          <label className="font-medium text-gray-700 block mb-1">
+                            {feature.label}
+                          </label>
+                          <p className="text-xs text-gray-500">{feature.desc}</p>
+                        </div>
+                        <label className="relative inline-flex items-center cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={advancedSettings[feature.key as keyof AdvancedAISettings] as boolean}
+                            onChange={(e) => setAdvancedSettings(prev => ({ ...prev, [feature.key]: e.target.checked }))}
+                            className="sr-only peer"
+                          />
+                          <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                        </label>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* ===== SECTION 3: إعدادات متقدمة ===== */}
+                <div className="border-b pb-8">
+                  <h4 className="text-xl font-semibold mb-4 flex items-center gap-2">
+                    🔧 إعدادات متقدمة
+                  </h4>
+                  
+                  {/* Max Messages Per Conversation */}
+                  <div className="space-y-3 mb-6">
+                    <div className="flex justify-between items-center">
+                      <label className="font-medium text-gray-700">
+                        💬 الحد الأقصى للرسائل لكل محادثة
+                      </label>
+                      <span className="px-3 py-1 bg-indigo-100 text-indigo-800 rounded-full font-mono text-sm">
+                        {advancedSettings.maxMessagesPerConversation}
+                      </span>
+                    </div>
+                    <input
+                      type="range"
+                      min="10"
+                      max="200"
+                      step="10"
+                      value={advancedSettings.maxMessagesPerConversation}
+                      onChange={(e) => setAdvancedSettings(prev => ({ ...prev, maxMessagesPerConversation: parseInt(e.target.value) }))}
+                      className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                    />
+                  </div>
+
+                  {/* Memory Retention Days */}
+                  <div className="space-y-3 mb-6">
+                    <div className="flex justify-between items-center">
+                      <label className="font-medium text-gray-700">
+                        📅 مدة الاحتفاظ بالذاكرة (بالأيام)
+                      </label>
+                      <span className="px-3 py-1 bg-teal-100 text-teal-800 rounded-full font-mono text-sm">
+                        {advancedSettings.memoryRetentionDays}
+                      </span>
+                    </div>
+                    <input
+                      type="range"
+                      min="1"
+                      max="90"
+                      step="1"
+                      value={advancedSettings.memoryRetentionDays}
+                      onChange={(e) => setAdvancedSettings(prev => ({ ...prev, memoryRetentionDays: parseInt(e.target.value) }))}
+                      className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                    />
+                  </div>
+
+                  {/* Pattern Application */}
+                  <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg mb-4">
+                    <div className="flex-1">
+                      <label className="font-medium text-gray-700 block mb-1">
+                        📋 تطبيق الأنماط (Patterns)
+                      </label>
+                      <p className="text-xs text-gray-500">استخدام الأنماط المحفوظة في الردود</p>
+                    </div>
+                    <label className="relative inline-flex items-center cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={advancedSettings.enablePatternApplication}
+                        onChange={(e) => setAdvancedSettings(prev => ({ ...prev, enablePatternApplication: e.target.checked }))}
+                        className="sr-only peer"
+                      />
+                      <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                    </label>
+                  </div>
+
+                  {/* Pattern Priority */}
+                  <div className="space-y-3">
+                    <label className="font-medium text-gray-700">
+                      🎯 أولوية الأنماط
+                    </label>
+                    <div className="grid grid-cols-3 gap-3">
+                      {['prompt', 'balanced', 'patterns'].map((priority) => (
+                        <button
+                          key={priority}
+                          onClick={() => setAdvancedSettings(prev => ({ ...prev, patternPriority: priority as any }))}
+                          className={`px-4 py-3 rounded-lg border-2 transition text-sm ${
+                            advancedSettings.patternPriority === priority
+                              ? 'border-blue-600 bg-blue-50 text-blue-700'
+                              : 'border-gray-200 hover:border-gray-300'
+                          }`}
+                        >
+                          {priority === 'prompt' && 'البرومبت أولاً'}
+                          {priority === 'balanced' && 'متوازن'}
+                          {priority === 'patterns' && 'الأنماط أولاً'}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                {/* ===== SECTION 4: إعدادات الجودة ===== */}
+                <div>
+                  <h4 className="text-xl font-semibold mb-4 flex items-center gap-2">
+                    ⭐ إعدادات الجودة
+                  </h4>
+                  <p className="text-gray-600 mb-6 text-sm">
+                    تحكم في معايير جودة الردود المولدة
+                  </p>
+
+                  {/* Min Quality Score */}
+                  <div className="space-y-3 mb-6">
+                    <div className="flex justify-between items-center">
+                      <label className="font-medium text-gray-700">
+                        📊 الحد الأدنى لدرجة الجودة
+                      </label>
+                      <span className="px-3 py-1 bg-yellow-100 text-yellow-800 rounded-full font-mono text-sm">
+                        {advancedSettings.minQualityScore}%
+                      </span>
+                    </div>
+                    <input
+                      type="range"
+                      min="0"
+                      max="100"
+                      step="5"
+                      value={advancedSettings.minQualityScore}
+                      onChange={(e) => setAdvancedSettings(prev => ({ ...prev, minQualityScore: parseInt(e.target.value) }))}
+                      className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                    />
+                    <div className="flex justify-between text-xs text-gray-500">
+                      <span>0% - منخفض</span>
+                      <span>50%</span>
+                      <span>100% - ممتاز</span>
+                    </div>
+                  </div>
+
+                  {/* Low Quality Alerts */}
+                  <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+                    <div className="flex-1">
+                      <label className="font-medium text-gray-700 block mb-1">
+                        🔔 تنبيهات الجودة المنخفضة
+                      </label>
+                      <p className="text-xs text-gray-500">إرسال تنبيه عند انخفاض جودة الرد</p>
+                    </div>
+                    <label className="relative inline-flex items-cursor">
+                      <input
+                        type="checkbox"
+                        checked={advancedSettings.enableLowQualityAlerts}
+                        onChange={(e) => setAdvancedSettings(prev => ({ ...prev, enableLowQualityAlerts: e.target.checked }))}
+                        className="sr-only peer"
+                      />
+                      <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                    </label>
+                  </div>
+                </div>
+
+                {/* Action Buttons */}
+                <div className="flex space-x-4 pt-6 border-t border-gray-200">
+                  <button
+                    onClick={saveAdvancedSettings}
+                    disabled={advancedSaving}
+                    className="bg-blue-600 text-white px-6 py-3 rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium"
+                  >
+                    {advancedSaving ? '⏳ جاري الحفظ...' : '💾 حفظ الإعدادات'}
+                  </button>
+
+                  <button
+                    onClick={loadAdvancedSettings}
+                    disabled={advancedLoading}
+                    className="bg-gray-600 text-white px-6 py-3 rounded-md hover:bg-gray-700 disabled:opacity-50 font-medium"
+                  >
+                    {advancedLoading ? '⏳ جاري التحديث...' : '🔄 إعادة تحميل'}
+                  </button>
                 </div>
               </div>
             )}

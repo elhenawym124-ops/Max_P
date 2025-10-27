@@ -156,6 +156,9 @@ function getPrisma() {
   return getSharedPrismaClient();
 }
 
+// ✨ Use safeDb from utils (imported at line 142)
+// safeDb is already imported, no need to redefine
+
 const prisma = getSharedPrismaClient();
 
 // Helper function to generate unique IDs
@@ -1365,18 +1368,12 @@ app.get('/api/v1/conversations',
     }
 
     // Get total count for pagination
-    const totalCount = await safeDb.execute(async (prisma) => {
-      return await prisma.conversation.count({
-        where: whereCondition
-      });
-    }, { 
-      fallback: 0,
-      maxRetries: 2
+    const totalCount = await prisma.conversation.count({
+      where: whereCondition
     });
 
-    // Use safe database operation with fallback
-    const conversations = await safeDb.execute(async (prisma) => {
-      return await prisma.conversation.findMany({
+    // Fetch conversations from database
+    const conversations = await prisma.conversation.findMany({
         where: whereCondition,
         select: {
           id: true,
@@ -1421,10 +1418,6 @@ app.get('/api/v1/conversations',
         skip: skip,
         take: limitNum
       });
-    }, { 
-      fallback: [], // Return empty array if database is unavailable
-      maxRetries: 2 // Fewer retries for this endpoint
-    });
 
     // Transform data to match frontend format
     const transformedConversations = await Promise.all(conversations.map(async conv => {

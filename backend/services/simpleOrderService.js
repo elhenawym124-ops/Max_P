@@ -1,4 +1,9 @@
+<<<<<<< HEAD
 const { getSharedPrismaClient, safeQuery } = require('./sharedDatabase');
+=======
+const { getSharedPrismaClient } = require('./sharedDatabase');
+const prisma = getSharedPrismaClient();
+>>>>>>> 54ce7f00a812876c34b436686a57a6aadc2a8428
 
 class SimpleOrderService {
   constructor() {

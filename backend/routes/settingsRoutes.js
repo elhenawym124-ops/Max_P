@@ -593,4 +593,241 @@ router.put('/queue', async (req, res) => {
   }
 });
 
+// ✨ ========================================
+// ✨ AI Advanced Settings Endpoints
+// ✨ ========================================
+
+/**
+ * GET /settings/ai - جلب إعدادات AI المتقدمة
+ */
+router.get('/ai', async (req, res) => {
+  try {
+    const companyId = req.query.companyId || req.user?.companyId || 'cmd5c0c9y0000ymzdd7wtv7ib';
+
+    const aiSettings = await prisma.aiSettings.findUnique({
+      where: { companyId }
+    });
+
+    if (!aiSettings) {
+      // إرجاع الإعدادات الافتراضية
+      return res.json({
+        success: true,
+        settings: {
+          aiTemperature: 0.7,
+          aiTopP: 0.9,
+          aiTopK: 40,
+          aiMaxTokens: 1024,
+          aiResponseStyle: 'balanced',
+          enableDiversityCheck: true,
+          enableToneAdaptation: true,
+          enableEmotionalResponse: true,
+          enableSmartSuggestions: false,
+          enableLongTermMemory: false,
+          maxMessagesPerConversation: 50,
+          memoryRetentionDays: 30,
+          enablePatternApplication: true,
+          patternPriority: 'balanced',
+          minQualityScore: 70,
+          enableLowQualityAlerts: true
+        }
+      });
+    }
+
+    res.json({
+      success: true,
+      settings: {
+        aiTemperature: aiSettings.aiTemperature,
+        aiTopP: aiSettings.aiTopP,
+        aiTopK: aiSettings.aiTopK,
+        aiMaxTokens: aiSettings.aiMaxTokens,
+        aiResponseStyle: aiSettings.aiResponseStyle,
+        enableDiversityCheck: aiSettings.enableDiversityCheck,
+        enableToneAdaptation: aiSettings.enableToneAdaptation,
+        enableEmotionalResponse: aiSettings.enableEmotionalResponse,
+        enableSmartSuggestions: aiSettings.enableSmartSuggestions,
+        enableLongTermMemory: aiSettings.enableLongTermMemory,
+        maxMessagesPerConversation: aiSettings.maxMessagesPerConversation,
+        memoryRetentionDays: aiSettings.memoryRetentionDays,
+        enablePatternApplication: aiSettings.enablePatternApplication,
+        patternPriority: aiSettings.patternPriority,
+        minQualityScore: aiSettings.minQualityScore,
+        enableLowQualityAlerts: aiSettings.enableLowQualityAlerts
+      }
+    });
+
+  } catch (error) {
+    console.error('❌ Error fetching AI settings:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch AI settings',
+      details: error.message
+    });
+  }
+});
+
+/**
+ * PUT /settings/ai - تحديث إعدادات AI المتقدمة
+ */
+router.put('/ai', async (req, res) => {
+  try {
+    const companyId = req.query.companyId || req.user?.companyId || 'cmd5c0c9y0000ymzdd7wtv7ib';
+    const {
+      aiTemperature,
+      aiTopP,
+      aiTopK,
+      aiMaxTokens,
+      aiResponseStyle,
+      enableDiversityCheck,
+      enableToneAdaptation,
+      enableEmotionalResponse,
+      enableSmartSuggestions,
+      enableLongTermMemory,
+      maxMessagesPerConversation,
+      memoryRetentionDays,
+      enablePatternApplication,
+      patternPriority,
+      minQualityScore,
+      enableLowQualityAlerts
+    } = req.body;
+
+    // التحقق من وجود الشركة
+    const company = await prisma.company.findUnique({
+      where: { id: companyId }
+    });
+
+    if (!company) {
+      return res.status(404).json({
+        success: false,
+        error: 'Company not found'
+      });
+    }
+
+    // تحديث أو إنشاء الإعدادات
+    const aiSettings = await prisma.aiSettings.upsert({
+      where: { companyId },
+      update: {
+        aiTemperature: aiTemperature !== undefined ? aiTemperature : undefined,
+        aiTopP: aiTopP !== undefined ? aiTopP : undefined,
+        aiTopK: aiTopK !== undefined ? aiTopK : undefined,
+        aiMaxTokens: aiMaxTokens !== undefined ? aiMaxTokens : undefined,
+        aiResponseStyle: aiResponseStyle || undefined,
+        enableDiversityCheck: enableDiversityCheck !== undefined ? enableDiversityCheck : undefined,
+        enableToneAdaptation: enableToneAdaptation !== undefined ? enableToneAdaptation : undefined,
+        enableEmotionalResponse: enableEmotionalResponse !== undefined ? enableEmotionalResponse : undefined,
+        enableSmartSuggestions: enableSmartSuggestions !== undefined ? enableSmartSuggestions : undefined,
+        enableLongTermMemory: enableLongTermMemory !== undefined ? enableLongTermMemory : undefined,
+        maxMessagesPerConversation: maxMessagesPerConversation || undefined,
+        memoryRetentionDays: memoryRetentionDays || undefined,
+        enablePatternApplication: enablePatternApplication !== undefined ? enablePatternApplication : undefined,
+        patternPriority: patternPriority || undefined,
+        minQualityScore: minQualityScore !== undefined ? minQualityScore : undefined,
+        enableLowQualityAlerts: enableLowQualityAlerts !== undefined ? enableLowQualityAlerts : undefined,
+        updatedAt: new Date()
+      },
+      create: {
+        companyId,
+        aiTemperature: aiTemperature || 0.7,
+        aiTopP: aiTopP || 0.9,
+        aiTopK: aiTopK || 40,
+        aiMaxTokens: aiMaxTokens || 1024,
+        aiResponseStyle: aiResponseStyle || 'balanced',
+        enableDiversityCheck: enableDiversityCheck !== undefined ? enableDiversityCheck : true,
+        enableToneAdaptation: enableToneAdaptation !== undefined ? enableToneAdaptation : true,
+        enableEmotionalResponse: enableEmotionalResponse !== undefined ? enableEmotionalResponse : true,
+        enableSmartSuggestions: enableSmartSuggestions || false,
+        enableLongTermMemory: enableLongTermMemory || false,
+        maxMessagesPerConversation: maxMessagesPerConversation || 50,
+        memoryRetentionDays: memoryRetentionDays || 30,
+        enablePatternApplication: enablePatternApplication !== undefined ? enablePatternApplication : true,
+        patternPriority: patternPriority || 'balanced',
+        minQualityScore: minQualityScore || 70,
+        enableLowQualityAlerts: enableLowQualityAlerts !== undefined ? enableLowQualityAlerts : true
+      }
+    });
+
+    console.log(`✅ [AI-SETTINGS] Updated AI settings for company: ${companyId}`);
+
+    res.json({
+      success: true,
+      message: 'AI settings updated successfully',
+      settings: aiSettings
+    });
+
+  } catch (error) {
+    console.error('❌ Error updating AI settings:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to update AI settings',
+      details: error.message
+    });
+  }
+});
+
+/**
+ * POST /settings/ai/reset - إعادة تعيين إعدادات AI للقيم الافتراضية
+ */
+router.post('/ai/reset', async (req, res) => {
+  try {
+    const companyId = req.query.companyId || req.user?.companyId || 'cmd5c0c9y0000ymzdd7wtv7ib';
+
+    const aiSettings = await prisma.aiSettings.upsert({
+      where: { companyId },
+      update: {
+        aiTemperature: 0.7,
+        aiTopP: 0.9,
+        aiTopK: 40,
+        aiMaxTokens: 1024,
+        aiResponseStyle: 'balanced',
+        enableDiversityCheck: true,
+        enableToneAdaptation: true,
+        enableEmotionalResponse: true,
+        enableSmartSuggestions: false,
+        enableLongTermMemory: false,
+        maxMessagesPerConversation: 50,
+        memoryRetentionDays: 30,
+        enablePatternApplication: true,
+        patternPriority: 'balanced',
+        minQualityScore: 70,
+        enableLowQualityAlerts: true,
+        updatedAt: new Date()
+      },
+      create: {
+        companyId,
+        aiTemperature: 0.7,
+        aiTopP: 0.9,
+        aiTopK: 40,
+        aiMaxTokens: 1024,
+        aiResponseStyle: 'balanced',
+        enableDiversityCheck: true,
+        enableToneAdaptation: true,
+        enableEmotionalResponse: true,
+        enableSmartSuggestions: false,
+        enableLongTermMemory: false,
+        maxMessagesPerConversation: 50,
+        memoryRetentionDays: 30,
+        enablePatternApplication: true,
+        patternPriority: 'balanced',
+        minQualityScore: 70,
+        enableLowQualityAlerts: true
+      }
+    });
+
+    console.log(`🔄 [AI-SETTINGS] Reset AI settings to defaults for company: ${companyId}`);
+
+    res.json({
+      success: true,
+      message: 'AI settings reset to defaults',
+      settings: aiSettings
+    });
+
+  } catch (error) {
+    console.error('❌ Error resetting AI settings:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to reset AI settings',
+      details: error.message
+    });
+  }
+});
+
 module.exports = router;

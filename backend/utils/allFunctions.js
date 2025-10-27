@@ -2049,41 +2049,9 @@ async function handleFacebookMessage(webhookEvent, currentPageId = null) {
         }
       }
 
-      // Emit AI response to Socket.IO with deduplication
-      const messageKey = `ai_${aiMessage.id}_${conversation.id}`;
-      
-      if (sentMessagesCache.has(messageKey)) {
-        //console.log(`⚠️ [SOCKET] Message already sent - skipping duplicate: ${messageKey}`);
-      } else {
-        const io = socketService.getIO();
-        if (io) {
-          const socketData = {
-            id: aiMessage.id,
-            conversationId: aiMessage.conversationId,
-            content: aiMessage.content,
-            type: 'text',
-            isFromCustomer: false,
-            timestamp: aiMessage.createdAt,
-            metadata: JSON.parse(aiMessage.metadata),
-            isAIGenerated: true,
-            senderId: 'ai_agent',
-            senderName: 'الذكاء الاصطناعي'
-          };
-
-          //console.log(`🔌 [SOCKET] Emitting AI response:`, socketData);
-          io.emit('new_message', socketData);
-          
-          // Add to cache to prevent duplicates
-          sentMessagesCache.add(messageKey);
-          
-          // Clean cache after 5 minutes
-          setTimeout(() => {
-            sentMessagesCache.delete(messageKey);
-          }, 5 * 60 * 1000);
-          
-          //console.log(`✅ [SOCKET] AI response emitted successfully`);
-        }
-      }
+      // ✅ AI response socket event will be sent via Facebook echo webhook
+      // No need for duplicate socket emission here since the message
+      // will be saved and emitted when Facebook sends the echo
 
       // Update conversation
       await prisma.conversation.update({

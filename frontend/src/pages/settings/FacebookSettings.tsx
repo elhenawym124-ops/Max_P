@@ -229,7 +229,7 @@ const FacebookSettings: React.FC = () => {
     }
   };
 
-  const handleConnectPage = async () => {
+  const handleConnectPage = async (forceReassign: boolean = false) => {
     if (!newPageData.pageAccessToken || !pageInfo) {
       console.error('❌ [FacebookSettings] Missing required data for connection');
       alert('يرجى إدخال Access Token صحيح والتأكد من صحة بيانات الصفحة');
@@ -244,7 +244,8 @@ const FacebookSettings: React.FC = () => {
       const requestBody = {
         pageId: pageInfo.id,
         pageAccessToken: newPageData.pageAccessToken,
-        pageName: pageInfo.name
+        pageName: pageInfo.name,
+        forceReassign: forceReassign
       };
       console.log('📤 [FacebookSettings] Sending connection request:', {
         ...requestBody,
@@ -260,7 +261,11 @@ const FacebookSettings: React.FC = () => {
 
       if (data.success) {
         console.log('✅ [FacebookSettings] Page connected successfully');
-        alert(`✅ تم ربط الصفحة بنجاح!
+        const message = data.data?.isReassignment 
+          ? `✅ تم إعادة تخصيص الصفحة وربطها بنجاح!`
+          : `✅ تم ربط الصفحة بنجاح!`;
+        
+        alert(`${message}
 
 اسم الصفحة: ${pageInfo.name}
 معرف الصفحة: ${pageInfo.id}
@@ -281,7 +286,35 @@ const FacebookSettings: React.FC = () => {
       }
     } catch (error: any) {
       console.error('❌ [FacebookSettings] Error connecting page:', error);
-      alert(`❌ حدث خطأ أثناء ربط الصفحة: ${error.message}`);
+      
+      // Handle 403 error (page belongs to another company)
+      if (error.response?.status === 403 && error.response?.data?.code === 'PAGE_BELONGS_TO_OTHER_COMPANY') {
+        const isAdmin = user?.role === 'admin' || user?.role === 'owner' || user?.role === 'ADMIN';
+        
+        if (isAdmin || error.response.data.canReassign) {
+          const confirmMessage = `⚠️ تحذير: هذه الصفحة مربوطة بشركة أخرى.
+
+هل تريد إعادة تخصيص هذه الصفحة لشركتك الحالية؟
+
+ملاحظة: سيتم فصل الصفحة من الشركة السابقة وربطها بشركتك.`;
+          
+          if (confirm(confirmMessage)) {
+            // Retry with forceReassign flag
+            console.log('🔄 [FacebookSettings] User confirmed reassignment, retrying...');
+            setIsConnecting(false); // Reset before retry
+            await handleConnectPage(true);
+            return;
+          }
+        } else {
+          alert(`❌ هذه الصفحة مربوطة بشركة أخرى ولا يمكنك إعادة تخصيصها.
+
+معرف الشركة الحالية: ${error.response.data.existingCompanyId}
+
+يرجى الاتصال بمسؤول النظام للمساعدة.`);
+        }
+      } else {
+        alert(`❌ حدث خطأ أثناء ربط الصفحة: ${error.response?.data?.error || error.message}`);
+      }
     } finally {
       setIsConnecting(false);
       console.log('🏁 [FacebookSettings] Page connection process completed');

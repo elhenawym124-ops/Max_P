@@ -462,6 +462,31 @@ model AiSettings {
   ragEnabled               Boolean  @default(true)
   qualityEvaluationEnabled Boolean  @default(true)
   queueSettings            String?  @db.Text
+  
+  // ✨ إعدادات AI المتقدمة الجديدة
+  aiTemperature            Float?   @default(0.7)
+  aiTopP                   Float?   @default(0.9)
+  aiTopK                   Int?     @default(40)
+  aiMaxTokens              Int?     @default(1024)
+  aiResponseStyle          String?  @default("balanced") // formal, casual, balanced
+  
+  // ✨ إعدادات السلوك الذكي
+  enableDiversityCheck     Boolean  @default(true)
+  enableToneAdaptation     Boolean  @default(true)
+  enableEmotionalResponse  Boolean  @default(true)
+  enableSmartSuggestions   Boolean  @default(false)
+  enableLongTermMemory     Boolean  @default(false)
+  
+  // ✨ إعدادات متقدمة
+  maxMessagesPerConversation Int?   @default(50)
+  memoryRetentionDays      Int?     @default(30)
+  enablePatternApplication Boolean  @default(true)
+  patternPriority          String?  @default("balanced") // prompt, balanced, patterns
+  
+  // ✨ إعدادات الجودة
+  minQualityScore          Float?   @default(70)
+  enableLowQualityAlerts   Boolean  @default(true)
+  
   company                  Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
 
   @@map("ai_settings")

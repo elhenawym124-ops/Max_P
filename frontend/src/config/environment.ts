@@ -47,7 +47,7 @@ const createEnvironmentConfig = (): EnvironmentConfig => {
   
   if (isDevelopment) {
     // إعدادات بيئة التطوير
-    const backendPort = 3001;
+    const backendPort = 3007;
     const frontendPort = window.location.port || '3000';
     
     apiUrl = `http://localhost:${backendPort}/api/v1`;

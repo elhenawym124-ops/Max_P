@@ -7,9 +7,16 @@ const cron = require('node-cron');
 const { getSharedPrismaClient } = require('./sharedDatabase');
 const PatternCleanupService = require('./patternCleanupService');
 
+const { getSharedPrismaClient } = require('./sharedDatabase');
+
 class ScheduledPatternMaintenanceService {
   constructor() {
+<<<<<<< HEAD
     this.prisma = getSharedPrismaClient(); // Use shared database connection
+=======
+    // Use shared PrismaClient instead of creating new instance
+    this.prisma = getSharedPrismaClient();
+>>>>>>> 54ce7f00a812876c34b436686a57a6aadc2a8428
     this.patternCleanup = new PatternCleanupService();
     this.isRunning = false;
     this.lastRun = null;
