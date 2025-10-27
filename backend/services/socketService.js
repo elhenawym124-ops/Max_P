@@ -1,7 +1,7 @@
 const { Server } = require('socket.io');
 const jwt = require('jsonwebtoken');
 const envConfig = require('../config/environment');
-const { getSharedPrismaClient } = require('./sharedDatabase');
+const { getSharedPrismaClient, safeQuery } = require('./sharedDatabase');
 const prisma = getSharedPrismaClient();
 
 class SocketService {
@@ -48,10 +48,12 @@ class SocketService {
       const decoded = jwt.verify(token, process.env.JWT_SECRET || 'your-secret-key');
 
       // Verify user exists and is active
-      const user = await prisma.user.findUnique({
-        where: { id: decoded.userId },
-        include: { company: true }
-      });
+      const user = await safeQuery(async () => {
+        return await prisma.user.findUnique({
+          where: { id: decoded.userId },
+          include: { company: true }
+        });
+      }, 3);
 
       if (!user || !user.companyId) {
         //console.log(`❌ [SOCKET-AUTH] Invalid user or missing company for socket ${socket.id}`);
@@ -239,13 +241,15 @@ class SocketService {
       }
 
       // Verify conversation belongs to user's company
-      const conversation = await prisma.conversation.findFirst({
-        where: {
-          id: conversationId,
-          companyId: socket.companyId
-        },
-        select: { id: true, companyId: true }
-      });
+      const conversation = await safeQuery(async () => {
+        return await prisma.conversation.findFirst({
+          where: {
+            id: conversationId,
+            companyId: socket.companyId
+          },
+          select: { id: true, companyId: true }
+        });
+      }, 3);
 
       if (!conversation) {
         socket.emit('error', { message: 'Conversation not found or access denied' });
@@ -384,13 +388,15 @@ class SocketService {
 
     try {
       // Verify conversation belongs to user's company
-      const conversation = await prisma.conversation.findFirst({
-        where: {
-          id: conversationId,
-          companyId: socket.companyId
-        },
-        select: { id: true, companyId: true }
-      });
+      const conversation = await safeQuery(async () => {
+        return await prisma.conversation.findFirst({
+          where: {
+            id: conversationId,
+            companyId: socket.companyId
+          },
+          select: { id: true, companyId: true }
+        });
+      }, 3);
 
       if (!conversation) {
         socket.emit('error', { message: 'Conversation not found or access denied' });

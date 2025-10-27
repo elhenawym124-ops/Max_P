@@ -6,7 +6,7 @@
  */
 
 const cron = require('node-cron');
-const { getSharedPrismaClient } = require('./sharedDatabase');
+const { getSharedPrismaClient, safeQuery } = require('./sharedDatabase');
 const prisma = getSharedPrismaClient();
 
 class BroadcastSchedulerService {
@@ -71,7 +71,8 @@ class BroadcastSchedulerService {
       console.log(`🔍 [BroadcastScheduler] Checking for scheduled campaigns at ${now.toISOString()}`);
 
       // البحث عن الحملات المجدولة التي حان وقت إرسالها
-      const scheduledCampaigns = await prisma.broadcastCampaign.findMany({
+      const scheduledCampaigns = await safeQuery(async () => {
+        return await prisma.broadcastCampaign.findMany({
         where: {
           status: 'scheduled',
           scheduledAt: {
@@ -88,6 +89,7 @@ class BroadcastSchedulerService {
           }
         }
       });
+      }, 5);
 
       if (scheduledCampaigns.length === 0) {
         console.log('✅ [BroadcastScheduler] No campaigns to send');
@@ -103,13 +105,15 @@ class BroadcastSchedulerService {
           console.log(`⚠️ [BroadcastScheduler] Skipping campaign ${campaign.id} - Company inactive`);
           
           // تحديث حالة الحملة إلى failed
-          await prisma.broadcastCampaign.update({
-            where: { id: campaign.id },
-            data: {
-              status: 'failed',
-              failureReason: 'Company is inactive'
-            }
-          });
+          await safeQuery(async () => {
+            return await prisma.broadcastCampaign.update({
+              where: { id: campaign.id },
+              data: {
+                status: 'failed',
+                failureReason: 'Company is inactive'
+              }
+            });
+          }, 5);
           
           continue;
         }
@@ -125,16 +129,17 @@ class BroadcastSchedulerService {
           console.error(`❌ [BroadcastScheduler] Error sending campaign ${campaign.id}:`, error.message);
           
           // تحديث حالة الحملة إلى failed
-          await prisma.broadcastCampaign.update({
-            where: { id: campaign.id },
-            data: {
-              status: 'failed',
-              failureReason: error.message
-            }
-          }).catch(err => console.error('Error updating campaign status:', err));
+          await safeQuery(async () => {
+            return await prisma.broadcastCampaign.update({
+              where: { id: campaign.id },
+              data: {
+                status: 'failed',
+                failureReason: error.message
+              }
+            });
+          }, 5).catch(err => console.error('Error updating campaign status:', err));
         }
       }
-
     } catch (error) {
       console.error('❌ [BroadcastScheduler] Error in scheduler:', error.message);
       this.stats.errors++;
@@ -143,9 +148,6 @@ class BroadcastSchedulerService {
     }
   }
 
-  /**
-   * إرسال حملة مجدولة
-   */
   async sendScheduledCampaign(campaign) {
     const { sendFacebookMessage } = require('../utils/allFunctions');
     const socketService = require('./socketService');
@@ -153,13 +155,15 @@ class BroadcastSchedulerService {
     console.log(`📊 [BroadcastScheduler] Starting to send campaign ${campaign.id}`);
 
     // تحديث حالة الحملة إلى "sending"
-    await prisma.broadcastCampaign.update({
-      where: { id: campaign.id },
-      data: {
-        status: 'sending',
-        sentAt: new Date()
-      }
-    });
+    await safeQuery(async () => {
+      return await prisma.broadcastCampaign.update({
+        where: { id: campaign.id },
+        data: {
+          status: 'sending',
+          sentAt: new Date()
+        }
+      });
+    }, 5);
 
     // حساب وقت آخر 24 ساعة
     const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
@@ -170,7 +174,8 @@ class BroadcastSchedulerService {
 
     if (campaign.targetAudience === 'all') {
       console.log('🌐 [BroadcastScheduler] Fetching all active conversations');
-      conversations = await prisma.conversation.findMany({
+      conversations = await safeQuery(async () => {
+        return await prisma.conversation.findMany({
         where: {
           companyId: campaign.companyId,
           status: 'ACTIVE',
@@ -196,9 +201,11 @@ class BroadcastSchedulerService {
           }
         }
       });
+      }, 4);
     } else {
       // منطق للجمهور المستهدف المخصص
-      conversations = await prisma.conversation.findMany({
+      conversations = await safeQuery(async () => {
+        return await prisma.conversation.findMany({
         where: {
           companyId: campaign.companyId,
           status: 'ACTIVE',
@@ -224,17 +231,20 @@ class BroadcastSchedulerService {
           }
         }
       });
+      }, 4);
     }
 
     console.log(`📊 [BroadcastScheduler] Found ${conversations.length} active conversations`);
 
     // تحديث عدد المستلمين في الحملة
-    await prisma.broadcastCampaign.update({
+    await safeQuery(async () => {
+      return await prisma.broadcastCampaign.update({
       where: { id: campaign.id },
       data: {
         recipientCount: conversations.length
       }
-    });
+      });
+    }, 5);
 
     // إنشاء سجلات المستلمين
     const recipients = conversations.map(conv => ({
@@ -247,19 +257,23 @@ class BroadcastSchedulerService {
     }));
 
     if (recipients.length > 0) {
-      await prisma.broadcastRecipient.createMany({
+      await safeQuery(async () => {
+        return await prisma.broadcastRecipient.createMany({
         data: recipients
-      });
+        });
+      }, 5);
     } else {
       console.log('⚠️ [BroadcastScheduler] No recipients found for campaign');
       
-      await prisma.broadcastCampaign.update({
+      await safeQuery(async () => {
+        return await prisma.broadcastCampaign.update({
         where: { id: campaign.id },
         data: {
           status: 'failed',
           failureReason: 'No active recipients found'
         }
-      });
+        });
+      }, 5);
       
       return;
     }
@@ -292,7 +306,8 @@ class BroadcastSchedulerService {
           console.log(`⚠️ [BroadcastScheduler] Skipping customer ${conv.customer.firstName} - No Facebook ID`);
           failedCount++;
 
-          await prisma.broadcastRecipient.updateMany({
+          await safeQuery(async () => {
+            return await prisma.broadcastRecipient.updateMany({
             where: {
               campaignId: campaign.id,
               conversationId: conv.id
@@ -302,7 +317,8 @@ class BroadcastSchedulerService {
               failureReason: 'No Facebook ID',
               sentAt: new Date()
             }
-          });
+            });
+          }, 4);
 
           continue;
         }
@@ -322,7 +338,8 @@ class BroadcastSchedulerService {
 
         // إذا لم يتم العثور على Page ID، استخدم أول صفحة متصلة
         if (!conversationPageId) {
-          const defaultPage = await prisma.facebookPage.findFirst({
+          const defaultPage = await safeQuery(async () => {
+            return await prisma.facebookPage.findFirst({
             where: {
               companyId: campaign.companyId,
               status: 'connected'
@@ -330,7 +347,8 @@ class BroadcastSchedulerService {
             orderBy: {
               connectedAt: 'desc'
             }
-          });
+            });
+          }, 3);
 
           if (defaultPage) {
             conversationPageId = defaultPage.pageId;
@@ -338,7 +356,8 @@ class BroadcastSchedulerService {
             console.log(`❌ [BroadcastScheduler] No connected Facebook page for customer ${conv.customer.firstName}`);
             failedCount++;
 
-            await prisma.broadcastRecipient.updateMany({
+            await safeQuery(async () => {
+              return await prisma.broadcastRecipient.updateMany({
               where: {
                 campaignId: campaign.id,
                 conversationId: conv.id
@@ -348,7 +367,8 @@ class BroadcastSchedulerService {
                 failureReason: 'No connected Facebook page',
                 sentAt: new Date()
               }
-            });
+              });
+            }, 4);
 
             continue;
           }
@@ -357,7 +377,8 @@ class BroadcastSchedulerService {
         // حفظ الرسائل في database قبل الإرسال
         const savedMessages = [];
         if (campaign.message && campaign.message.trim().length > 0) {
-          const textMessage = await prisma.message.create({
+          const textMessage = await safeQuery(async () => {
+            return await prisma.message.create({
             data: {
               conversationId: conv.id,
               content: campaign.message,
@@ -371,7 +392,8 @@ class BroadcastSchedulerService {
                 sentAt: new Date().toISOString()
               })
             }
-          });
+            });
+          }, 6);
           savedMessages.push(textMessage);
         }
 
@@ -380,7 +402,8 @@ class BroadcastSchedulerService {
         // إرسال الصور إن وجدت
         if (campaign.images && Array.isArray(campaign.images) && campaign.images.length > 0) {
           for (const imageUrl of campaign.images) {
-            const imageMessage = await prisma.message.create({
+            const imageMessage = await safeQuery(async () => {
+              return await prisma.message.create({
               data: {
                 conversationId: conv.id,
                 content: imageUrl,
@@ -394,7 +417,8 @@ class BroadcastSchedulerService {
                   sentAt: new Date().toISOString()
                 })
               }
-            });
+              });
+            }, 6);
             savedMessages.push(imageMessage);
           }
 
@@ -436,7 +460,8 @@ class BroadcastSchedulerService {
         if (sendResult.success) {
           sentCount++;
 
-          await prisma.broadcastRecipient.updateMany({
+          await safeQuery(async () => {
+            return await prisma.broadcastRecipient.updateMany({
             where: {
               campaignId: campaign.id,
               conversationId: conv.id
@@ -445,28 +470,33 @@ class BroadcastSchedulerService {
               status: 'sent',
               sentAt: new Date()
             }
-          });
+            });
+          }, 5);
         } else {
           failedCount++;
 
           // حذف الرسائل المحفوظة لأن الإرسال فشل
           for (const msg of savedMessages) {
-            await prisma.message.delete({
+            await safeQuery(async () => {
+              return await prisma.message.delete({
               where: { id: msg.id }
-            });
+              });
+            }, 4);
           }
 
-          await prisma.broadcastRecipient.updateMany({
-            where: {
-              campaignId: campaign.id,
-              conversationId: conv.id
-            },
-            data: {
-              status: 'failed',
-              failureReason: sendResult.error || sendResult.message || 'Unknown error',
-              sentAt: new Date()
-            }
-          });
+          await safeQuery(async () => {
+            return await prisma.broadcastRecipient.updateMany({
+              where: {
+                campaignId: campaign.id,
+                conversationId: conv.id
+              },
+              data: {
+                status: 'failed',
+                failureReason: sendResult.error || sendResult.message || 'Unknown error',
+                sentAt: new Date()
+              }
+            });
+          }, 4);
         }
 
         // إرسال تحديث التقدم
@@ -490,7 +520,8 @@ class BroadcastSchedulerService {
         console.error(`❌ [BroadcastScheduler] Error sending to ${conv.customer.firstName}:`, error.message);
         failedCount++;
 
-        await prisma.broadcastRecipient.updateMany({
+        await safeQuery(async () => {
+          return await prisma.broadcastRecipient.updateMany({
           where: {
             campaignId: campaign.id,
             conversationId: conv.id
@@ -500,7 +531,8 @@ class BroadcastSchedulerService {
             failureReason: error.message,
             sentAt: new Date()
           }
-        }).catch(err => console.error('Error updating recipient status:', err));
+          });
+        }, 3).catch(err => console.error('Error updating recipient status:', err));
       }
     }
 
@@ -519,7 +551,8 @@ class BroadcastSchedulerService {
     }
 
     // تحديث إحصائيات الحملة
-    await prisma.broadcastCampaign.update({
+    await safeQuery(async () => {
+      return await prisma.broadcastCampaign.update({
       where: { id: campaign.id },
       data: {
         recipientCount: recipients.length,
@@ -528,7 +561,8 @@ class BroadcastSchedulerService {
         deliveredCount: sentCount,
         status: sentCount > 0 ? 'sent' : 'failed'
       }
-    });
+      });
+    }, 6);
 
     console.log(`✅ [BroadcastScheduler] Campaign ${campaign.id} completed - Recipients: ${recipients.length}, Sent: ${sentCount}, Failed: ${failedCount}`);
   }

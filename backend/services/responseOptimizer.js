@@ -481,12 +481,14 @@ class ResponseOptimizer {
     }
 
     try {
-      const { PrismaClient } = require('@prisma/client');
-      const prisma = new PrismaClient();
+      const { getSharedPrismaClient, safeQuery } = require('./sharedDatabase');
 
-      const aiSettings = await prisma.aiSettings.findFirst({
-        where: { companyId }
-      });
+      const aiSettings = await safeQuery(async () => {
+        const prisma = getSharedPrismaClient();
+        return await prisma.aiSettings.findFirst({
+          where: { companyId }
+        });
+      }, 3);
 
       if (aiSettings) {
         return {

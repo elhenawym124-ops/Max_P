@@ -22,6 +22,10 @@ let connectionLimitReached = false;
 let connectionLimitResetTime = null;
 const CONNECTION_LIMIT_COOLDOWN = 60 * 60 * 1000; // 1 hour
 
+// Cooldown message throttling to reduce log spam
+let lastCooldownLogTime = 0;
+const COOLDOWN_LOG_INTERVAL = 60 * 1000; // Log once per minute
+
 // Query queue to prevent simultaneous connections
 const queryQueue = [];
 let isProcessingQueue = false;
@@ -98,8 +102,7 @@ function isInConnectionLimitCooldown() {
     return false;
   }
   
-  const remainingMinutes = Math.ceil((connectionLimitResetTime - Date.now()) / 1000 / 60);
-  console.log(`⏳ [SharedDB] Still in cooldown - ${remainingMinutes}min remaining`);
+  // Cooldown still active (message throttling handled in executeWithRetry)
   return true;
 }
 
@@ -171,6 +174,14 @@ async function executeWithRetry(operation, maxRetries = 5, initialDelay = 2000) 
   // Circuit breaker - fail fast during cooldown
   if (isInConnectionLimitCooldown()) {
     const remainingTime = Math.ceil((connectionLimitResetTime - Date.now()) / 1000 / 60);
+    
+    // Throttle cooldown messages - log only once per minute
+    const now = Date.now();
+    if (now - lastCooldownLogTime > COOLDOWN_LOG_INTERVAL) {
+      console.log(`⏳ [SharedDB] Still in cooldown - ${remainingTime}min remaining`);
+      lastCooldownLogTime = now;
+    }
+    
     throw new Error(
       `Database in cooldown mode. Connection limit exceeded (500/hour). ` +
       `Retry after ${remainingTime} minutes.`

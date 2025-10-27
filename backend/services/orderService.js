@@ -1,9 +1,12 @@
-const { PrismaClient } = require('@prisma/client');
-const prisma = new PrismaClient();
+const { getSharedPrismaClient, safeQuery } = require('./sharedDatabase');
 
 class OrderService {
   constructor() {
     //console.log('🛒 OrderService initialized');
+  }
+
+  getPrisma() {
+    return getSharedPrismaClient();
   }
 
   // إنشاء طلب جديد من المحادثة (نسخة مبسطة)
@@ -43,8 +46,10 @@ class OrderService {
       const total = subtotal + shipping;
 
       // إنشاء الطلب بدون items (سنضيفها لاحقاً)
-      const order = await prisma.order.create({
-        data: {
+      const order = await safeQuery(async () => {
+        const prisma = this.getPrisma();
+        return await prisma.order.create({
+          data: {
           orderNumber,
           customerId,
           companyId,
@@ -56,16 +61,20 @@ class OrderService {
           status: 'PENDING',
           paymentStatus: 'PENDING',
           paymentMethod: 'CASH'
-        }
-      });
+          }
+        });
+      }, 5);
 
       // جلب الطلب مع بيانات العميل
-      const orderWithCustomer = await prisma.order.findUnique({
-        where: { id: order.id },
-        include: {
-          customer: true
-        }
-      });
+      const orderWithCustomer = await safeQuery(async () => {
+        const prisma = this.getPrisma();
+        return await prisma.order.findUnique({
+          where: { id: order.id },
+          include: {
+            customer: true
+          }
+        });
+      }, 3);
 
       // تحديث إحصائيات العميل
       await this.updateCustomerStats(customerId, parseFloat(total));
@@ -108,17 +117,22 @@ class OrderService {
   async findOrCreateProduct(productName, companyId) {
     try {
       // البحث عن المنتج الموجود
-      let product = await prisma.product.findFirst({
+      let product = await safeQuery(async () => {
+        const prisma = this.getPrisma();
+        return await prisma.product.findFirst({
         where: {
           name: productName,
           companyId
         }
-      });
+        });
+      }, 3);
 
       // إنشاء المنتج إذا لم يكن موجود
       if (!product) {
-        product = await prisma.product.create({
-          data: {
+        product = await safeQuery(async () => {
+          const prisma = this.getPrisma();
+          return await prisma.product.create({
+            data: {
             name: productName,
             sku: `AI-${Date.now()}`, // إنشاء SKU تلقائي
             companyId,
@@ -128,8 +142,9 @@ class OrderService {
               createdFromOrder: true,
               source: 'ai_agent'
             })
-          }
-        });
+            }
+          });
+        }, 5);
         //console.log('📦 Created new product:', productName);
       }
 
@@ -145,19 +160,25 @@ class OrderService {
   async updateCustomerStats(customerId, orderTotal) {
     try {
       // التحقق من وجود العميل أولاً
-      const customer = await prisma.customer.findUnique({
-        where: { id: customerId }
-      });
+      const customer = await safeQuery(async () => {
+        const prisma = this.getPrisma();
+        return await prisma.customer.findUnique({
+          where: { id: customerId }
+        });
+      }, 3);
 
       if (customer) {
-        await prisma.customer.update({
-          where: { id: customerId },
-          data: {
-            orderCount: { increment: 1 },
-            totalSpent: { increment: parseFloat(orderTotal) },
-            lastOrderAt: new Date()
-          }
-        });
+        await safeQuery(async () => {
+          const prisma = this.getPrisma();
+          return await prisma.customer.update({
+            where: { id: customerId },
+            data: {
+              orderCount: { increment: 1 },
+              totalSpent: { increment: parseFloat(orderTotal) },
+              lastOrderAt: new Date()
+            }
+          });
+        }, 5);
         //console.log('📊 Customer stats updated');
       }
     } catch (error) {
@@ -168,19 +189,21 @@ class OrderService {
   // الحصول على طلبات العميل
   async getCustomerOrders(customerId, limit = 10) {
     try {
-      const orders = await prisma.order.findMany({
-      where: { companyId: companyId },
-        where: { customerId },
-        include: {
-          items: {
-            include: {
-              product: true
+      const orders = await safeQuery(async () => {
+        const prisma = this.getPrisma();
+        return await prisma.order.findMany({
+          where: { customerId },
+          include: {
+            items: {
+              include: {
+                product: true
+              }
             }
-          }
-        },
-        orderBy: { createdAt: 'desc' },
-        take: limit
-      });
+          },
+          orderBy: { createdAt: 'desc' },
+          take: limit
+        });
+      }, 3);
 
       return orders;
     } catch (error) {
@@ -192,7 +215,9 @@ class OrderService {
   // الحصول على طلب بالرقم
   async getOrderByNumber(orderNumber) {
     try {
-      const order = await prisma.order.findUnique({
+      const order = await safeQuery(async () => {
+        const prisma = this.getPrisma();
+        return await prisma.order.findUnique({
         where: { orderNumber },
         include: {
           items: {
@@ -202,7 +227,8 @@ class OrderService {
           },
           customer: true
         }
-      });
+        });
+      }, 3);
 
       return order;
     } catch (error) {
@@ -214,7 +240,9 @@ class OrderService {
   // تحديث حالة الطلب
   async updateOrderStatus(orderNumber, status, notes = null) {
     try {
-      const order = await prisma.order.update({
+      const order = await safeQuery(async () => {
+        const prisma = this.getPrisma();
+        return await prisma.order.update({
         where: { orderNumber },
         data: {
           status,
@@ -225,7 +253,8 @@ class OrderService {
           customer: true,
           items: true
         }
-      });
+        });
+      }, 5);
 
       //console.log(`✅ Order ${orderNumber} status updated to ${status}`);
       return order;
@@ -238,7 +267,9 @@ class OrderService {
   // تأكيد الطلب
   async confirmOrder(orderNumber, shippingAddress = null) {
     try {
-      const order = await prisma.order.update({
+      const order = await safeQuery(async () => {
+        const prisma = this.getPrisma();
+        return await prisma.order.update({
         where: { orderNumber },
         data: {
           status: 'CONFIRMED',
@@ -253,7 +284,8 @@ class OrderService {
             }
           }
         }
-      });
+        });
+      }, 5);
 
       //console.log(`✅ Order ${orderNumber} confirmed`);
       return order;
@@ -266,23 +298,29 @@ class OrderService {
   // إلغاء الطلب
   async cancelOrder(orderNumber, reason = null) {
     try {
-      const order = await prisma.order.update({
+      const order = await safeQuery(async () => {
+        const prisma = this.getPrisma();
+        return await prisma.order.update({
         where: { orderNumber },
         data: {
           status: 'CANCELLED',
           notes: reason || 'تم إلغاء الطلب',
           updatedAt: new Date()
         }
-      });
+        });
+      }, 5);
 
       // تحديث إحصائيات العميل (تقليل العدد والمبلغ)
-      await prisma.customer.update({
-        where: { id: order.customerId },
-        data: {
-          orderCount: { decrement: 1 },
-          totalSpent: { decrement: parseFloat(order.total) }
-        }
-      });
+      await safeQuery(async () => {
+        const prisma = this.getPrisma();
+        return await prisma.customer.update({
+          where: { id: order.customerId },
+          data: {
+            orderCount: { decrement: 1 },
+            totalSpent: { decrement: parseFloat(order.total) }
+          }
+        });
+      }, 5);
 
       //console.log(`❌ Order ${orderNumber} cancelled`);
       return order;
@@ -298,7 +336,9 @@ class OrderService {
       const startDate = new Date();
       startDate.setDate(startDate.getDate() - days);
 
-      const stats = await prisma.order.aggregate({
+      const stats = await safeQuery(async () => {
+        const prisma = this.getPrisma();
+        return await prisma.order.aggregate({
         where: {
           companyId,
           createdAt: { gte: startDate }
@@ -306,7 +346,8 @@ class OrderService {
         _count: { id: true },
         _sum: { total: true },
         _avg: { total: true }
-      });
+        });
+      }, 3);
 
       return {
         totalOrders: stats._count.id || 0,

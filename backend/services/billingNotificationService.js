@@ -1,7 +1,5 @@
-const { PrismaClient } = require('@prisma/client');
 const cron = require('node-cron');
-
-const { getSharedPrismaClient } = require('./sharedDatabase');
+const { getSharedPrismaClient, safeQuery, healthCheck } = require('./sharedDatabase');
 
 const prisma = getSharedPrismaClient();
 
@@ -81,20 +79,40 @@ class BillingNotificationService {
     try {
       //console.log('🔍 Running daily billing checks...');
       
-      const { executeWithRetry } = require('./sharedDatabase');
+      // Early exit during DB cooldown to avoid futile retries and log spam
+      try {
+        const db = await healthCheck();
+        if (db?.status === 'cooldown') {
+          console.log('⏳ [BILLING] Skipping daily checks - database in cooldown mode');
+          return;
+        }
+      } catch { /* ignore health check errors */ }
       
-      await executeWithRetry(async () => {
-        await Promise.all([
-          this.checkUpcomingRenewals(),
-          this.checkOverdueInvoices(),
-          this.checkTrialExpirations(),
-          this.checkFailedPayments()
-        ]);
-      });
+      // Run checks sequentially to avoid overwhelming the database
+      await safeQuery(async () => {
+        await this.checkUpcomingRenewals();
+      }, 2);
+      
+      await safeQuery(async () => {
+        await this.checkOverdueInvoices();
+      }, 2);
+      
+      await safeQuery(async () => {
+        await this.checkTrialExpirations();
+      }, 2);
+      
+      await safeQuery(async () => {
+        await this.checkFailedPayments();
+      }, 2);
 
       //console.log('✅ Daily billing checks completed');
     } catch (error) {
-      console.error('❌ Error in daily billing checks:', error);
+      // If in cooldown, just log and skip
+      if (error.message.includes('cooldown')) {
+        console.log('⏳ [BILLING] Skipping checks - database in cooldown mode');
+      } else {
+        console.error('❌ Error in daily billing checks:', error);
+      }
     }
   }
 
@@ -105,19 +123,35 @@ class BillingNotificationService {
     try {
       //console.log('🔍 Running weekly billing checks...');
       
-      const { executeWithRetry } = require('./sharedDatabase');
+      // Early exit during DB cooldown to avoid futile retries and log spam
+      try {
+        const db = await healthCheck();
+        if (db?.status === 'cooldown') {
+          console.log('⏳ [BILLING] Skipping weekly checks - database in cooldown mode');
+          return;
+        }
+      } catch { /* ignore health check errors */ }
       
-      await executeWithRetry(async () => {
-        await Promise.all([
-          this.generateWeeklyReports(),
-          this.checkInactiveSubscriptions(),
-          this.sendWeeklyReminders()
-        ]);
-      });
+      // Run checks sequentially
+      await safeQuery(async () => {
+        await this.generateWeeklyReports();
+      }, 1);
+      
+      await safeQuery(async () => {
+        await this.checkInactiveSubscriptions();
+      }, 1);
+      
+      await safeQuery(async () => {
+        await this.sendWeeklyReminders();
+      }, 1);
 
       //console.log('✅ Weekly billing checks completed');
     } catch (error) {
-      console.error('❌ Error in weekly billing checks:', error);
+      if (error.message.includes('cooldown')) {
+        console.log('⏳ [BILLING] Skipping weekly checks - database in cooldown mode');
+      } else {
+        console.error('❌ Error in weekly billing checks:', error);
+      }
     }
   }
 
@@ -126,15 +160,13 @@ class BillingNotificationService {
    */
   async checkUpcomingRenewals() {
     try {
-      const { executeWithRetry } = require('./sharedDatabase');
-      
       const now = new Date();
       const in7Days = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
       const in3Days = new Date(now.getTime() + 3 * 24 * 60 * 60 * 1000);
       const in1Day = new Date(now.getTime() + 1 * 24 * 60 * 60 * 1000);
 
       // Check for renewals in 7 days
-      const renewalsIn7Days = await executeWithRetry(async () => {
+      const renewalsIn7Days = await safeQuery(async () => {
         return await prisma.subscription.findMany({
           where: { companyId: { not: null } },
           where: {
@@ -158,7 +190,7 @@ class BillingNotificationService {
       });
 
       // Check for renewals in 3 days
-      const renewalsIn3Days = await executeWithRetry(async () => {
+      const renewalsIn3Days = await safeQuery(async () => {
         return await prisma.subscription.findMany({
           where: { companyId: { not: null } },
           where: {
@@ -182,7 +214,7 @@ class BillingNotificationService {
       });
 
       // Check for renewals in 1 day
-      const renewalsIn1Day = await executeWithRetry(async () => {
+      const renewalsIn1Day = await safeQuery(async () => {
         return await prisma.subscription.findMany({
           where: { companyId: { not: null } },
           where: {
@@ -231,11 +263,10 @@ class BillingNotificationService {
    */
   async checkOverdueInvoices() {
     try {
-      const { executeWithRetry } = require('./sharedDatabase');
       
       const now = new Date();
       
-      const overdueInvoices = await executeWithRetry(async () => {
+      const overdueInvoices = await safeQuery(async () => {
         return await prisma.invoice.findMany({
           where: { companyId: { not: null } },
           where: {
@@ -261,7 +292,7 @@ class BillingNotificationService {
         
         // Update invoice status to OVERDUE with company isolation
         // SECURITY WARNING: Ensure companyId filter is included
-        await executeWithRetry(async () => {
+        await safeQuery(async () => {
           await prisma.invoice.updateMany({
             where: {
               companyId: { in: overdueInvoices.map(inv => inv.companyId) },
@@ -293,14 +324,13 @@ class BillingNotificationService {
    */
   async checkTrialExpirations() {
     try {
-      const { executeWithRetry } = require('./sharedDatabase');
       
       const now = new Date();
       const in3Days = new Date(now.getTime() + 3 * 24 * 60 * 60 * 1000);
       const in1Day = new Date(now.getTime() + 1 * 24 * 60 * 60 * 1000);
 
       // Check for trials expiring in 3 days
-      const trialsExpiring3Days = await executeWithRetry(async () => {
+      const trialsExpiring3Days = await safeQuery(async () => {
         return await prisma.subscription.findMany({
           where: { companyId: { not: null } },
           where: {
@@ -323,7 +353,7 @@ class BillingNotificationService {
       });
 
       // Check for trials expiring in 1 day
-      const trialsExpiring1Day = await executeWithRetry(async () => {
+      const trialsExpiring1Day = await safeQuery(async () => {
         return await prisma.subscription.findMany({
           where: { companyId: { not: null } },
           where: {
@@ -346,7 +376,7 @@ class BillingNotificationService {
       });
 
       // Check for expired trials
-      const expiredTrials = await executeWithRetry(async () => {
+      const expiredTrials = await safeQuery(async () => {
         return await prisma.subscription.findMany({
           where: { companyId: { not: null } },
           where: {
@@ -383,7 +413,7 @@ class BillingNotificationService {
         
         // Update expired trials to EXPIRED status with company isolation
         // SECURITY WARNING: Ensure companyId filter is included
-        await executeWithRetry(async () => {
+        await safeQuery(async () => {
           await prisma.subscription.updateMany({
             where: {
               companyId: { in: expiredTrials.map(sub => sub.companyId) },
@@ -414,9 +444,8 @@ class BillingNotificationService {
    */
   async checkFailedPayments() {
     try {
-      const { executeWithRetry } = require('./sharedDatabase');
       
-      const failedPayments = await executeWithRetry(async () => {
+      const failedPayments = await safeQuery(async () => {
         return await prisma.payment.findMany({
           where: { companyId: { not: null } },
           where: {
@@ -599,7 +628,6 @@ class BillingNotificationService {
    */
   async generateWeeklyReports() {
     try {
-      const { executeWithRetry } = require('./sharedDatabase');
       
       //console.log('📊 Generating weekly billing reports...');
       
@@ -613,14 +641,14 @@ class BillingNotificationService {
         newInvoices,
         paidInvoices
       ] = await Promise.all([
-        executeWithRetry(async () => {
+        safeQuery(async () => {
           return await prisma.subscription.count({
             where: {
               createdAt: { gte: weekAgo }
             }
           });
         }),
-        executeWithRetry(async () => {
+        safeQuery(async () => {
           return await prisma.subscription.count({
             where: {
               status: 'CANCELLED',
@@ -628,7 +656,7 @@ class BillingNotificationService {
             }
           });
         }),
-        executeWithRetry(async () => {
+        safeQuery(async () => {
           return await prisma.payment.aggregate({
             where: {
               status: 'COMPLETED',
@@ -637,14 +665,14 @@ class BillingNotificationService {
             _sum: { amount: true }
           });
         }),
-        executeWithRetry(async () => {
+        safeQuery(async () => {
           return await prisma.invoice.count({
             where: {
               createdAt: { gte: weekAgo }
             }
           });
         }),
-        executeWithRetry(async () => {
+        safeQuery(async () => {
           return await prisma.invoice.count({
             where: {
               status: 'PAID',
@@ -677,11 +705,10 @@ class BillingNotificationService {
    */
   async checkInactiveSubscriptions() {
     try {
-      const { executeWithRetry } = require('./sharedDatabase');
       
       const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
       
-      const inactiveSubscriptions = await executeWithRetry(async () => {
+      const inactiveSubscriptions = await safeQuery(async () => {
         return await prisma.subscription.findMany({
           where: { companyId: { not: null } },
           where: {

@@ -848,6 +848,23 @@ exports.sendCampaign = async (req, res) => {
             }
           });
 
+          // ✅ تحديث الرسائل المحفوظة بـ facebookMessageId لمنع التكرار عند استقبال echo
+          if (sendResult.messageId && savedMessages.length > 0) {
+            for (const msg of savedMessages) {
+              const currentMetadata = JSON.parse(msg.metadata || '{}');
+              await prisma.message.update({
+                where: { id: msg.id },
+                data: {
+                  metadata: JSON.stringify({
+                    ...currentMetadata,
+                    facebookMessageId: sendResult.messageId
+                  })
+                }
+              });
+            }
+            console.log(`🔖 [BROADCAST] Updated message with Facebook ID: ${sendResult.messageId}`);
+          }
+
           // ✅ الرسائل محفوظة مسبقاً قبل الإرسال
 
           sendResults.push({

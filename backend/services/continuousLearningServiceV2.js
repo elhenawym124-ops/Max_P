@@ -3,11 +3,11 @@
  * Enhanced Continuous Learning Service V2
  */
 
-const { PrismaClient } = require('@prisma/client');
+const { getSharedPrismaClient } = require('./sharedDatabase');
 
 class ContinuousLearningServiceV2 {
   constructor() {
-    this.prisma = new PrismaClient();
+    this.prisma = getSharedPrismaClient(); // Use shared database connection
     this.isInitialized = false;
     this.learningQueue = [];
     this.processingInterval = null;

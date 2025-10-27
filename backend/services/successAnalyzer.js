@@ -5,11 +5,11 @@
  * وتكتشف الأنماط التي تؤدي للنجاح
  */
 
-const { PrismaClient } = require('@prisma/client');
+const { getSharedPrismaClient } = require('./sharedDatabase');
 
 class SuccessAnalyzer {
   constructor() {
-    this.prisma = new PrismaClient();
+    this.prisma = getSharedPrismaClient(); // Use shared database connection
     this.analysisCache = new Map();
     this.minSampleSize = 3; // الحد الأدنى للعينات (تم تقليله من 10)
     this.confidenceThreshold = 0.5; // حد الثقة المطلوب (تم تقليله من 0.75)

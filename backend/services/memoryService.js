@@ -1,6 +1,6 @@
-const { PrismaClient } = require('@prisma/client');
+const { getSharedPrismaClient, safeQuery } = require('./sharedDatabase');
 
-const prisma = new PrismaClient();
+const prisma = getSharedPrismaClient(); // Use shared database connection
 
 class MemoryService {
   constructor() {
@@ -18,23 +18,25 @@ class MemoryService {
     
     try {
       // حفظ في قاعدة البيانات (ذاكرة طويلة المدى)
-      const savedInteraction = await prisma.conversationMemory.create({
-        data: {
-          conversationId,
-          senderId,
-          companyId, // ✅ إضافة companyId للعزل الأمني
-          userMessage: typeof userMessage === 'string' ? userMessage : JSON.stringify(userMessage),
-          aiResponse,
-          intent,
-          sentiment,
-          timestamp: timestamp || new Date(),
-          metadata: JSON.stringify({
-            messageLength: userMessage.length,
-            responseLength: aiResponse.length,
-            processingTime: Date.now()
-          })
-        }
-      });
+      const savedInteraction = await safeQuery(async () => {
+        return await prisma.conversationMemory.create({
+          data: {
+            conversationId,
+            senderId,
+            companyId, // ✅ إضافة companyId للعزل الأمني
+            userMessage: typeof userMessage === 'string' ? userMessage : JSON.stringify(userMessage),
+            aiResponse,
+            intent,
+            sentiment,
+            timestamp: timestamp || new Date(),
+            metadata: JSON.stringify({
+              messageLength: userMessage.length,
+              responseLength: aiResponse.length,
+              processingTime: Date.now()
+            })
+          }
+        });
+      }, 5);
 
       // حفظ في الذاكرة قصيرة المدى مع العزل الأمني
       const memoryKey = `${companyId}_${conversationId}_${senderId}`;
@@ -90,7 +92,8 @@ class MemoryService {
       //console.log(`🧠 [MEMORY-DEBUG] No short-term memory found, searching database...`);
 
       // إذا لم توجد في الذاكرة قصيرة المدى، جلب من قاعدة البيانات مع العزل الأمني
-      const interactions = await prisma.conversationMemory.findMany({
+      const interactions = await safeQuery(async () => {
+        return await prisma.conversationMemory.findMany({
         where: {
           conversationId,
           senderId,
@@ -101,7 +104,8 @@ class MemoryService {
         },
         orderBy: { timestamp: 'desc' },
         take: limit
-      });
+        });
+      }, 3);
 
       //console.log(`🧠 [MEMORY-DEBUG] Found ${interactions.length} interactions in database`);
       if (interactions.length > 0) {
@@ -162,14 +166,16 @@ class MemoryService {
 
     try {
       // جلب ملخص تفاعلات العميل مع العزل الأمني
-      const interactions = await prisma.conversationMemory.findMany({
+      const interactions = await safeQuery(async () => {
+        return await prisma.conversationMemory.findMany({
         where: {
           senderId,
           companyId // ✅ إضافة companyId للعزل الأمني
         },
         orderBy: { timestamp: 'desc' },
         take: 50
-      });
+        });
+      }, 3);
 
       if (interactions.length === 0) {
         return null;
@@ -258,14 +264,16 @@ class MemoryService {
     }
 
     try {
-      const interactions = await prisma.conversationMemory.findMany({
+      const interactions = await safeQuery(async () => {
+        return await prisma.conversationMemory.findMany({
         where: {
           conversationId,
           senderId,
           companyId // ✅ إضافة companyId للعزل الأمني
         },
         orderBy: { timestamp: 'asc' }
-      });
+        });
+      }, 3);
 
       if (interactions.length === 0) {
         return null;
@@ -364,9 +372,11 @@ class MemoryService {
       }
 
       const deletedMemoryCount = // SECURITY WARNING: Ensure companyId filter is included
-      await prisma.conversationMemory.deleteMany({
-        where: memoryWhere
-      });
+      await safeQuery(async () => {
+        return await prisma.conversationMemory.deleteMany({
+          where: memoryWhere
+        });
+      }, 5);
 
       // تنظيف الذاكرة قصيرة المدى القديمة
       let cleanedShortTermCount = 0;
@@ -410,12 +420,10 @@ class MemoryService {
 
       // إحصائيات قاعدة البيانات معزولة
       const [totalMemories, totalMessages, totalCustomers, conversationMemoryCount] = await Promise.all([
-        prisma.conversation.count({ where: whereClause }),
-        prisma.message.count({
-          where: companyId ? { conversation: { companyId } } : {}
-        }),
-        prisma.customer.count({ where: whereClause }),
-        prisma.conversationMemory.count({ where: whereClause })
+        safeQuery(async () => { return await prisma.conversation.count({ where: whereClause }); }, 3),
+        safeQuery(async () => { return await prisma.message.count({ where: companyId ? { conversation: { companyId } } : {} }); }, 3),
+        safeQuery(async () => { return await prisma.customer.count({ where: whereClause }); }, 3),
+        safeQuery(async () => { return await prisma.conversationMemory.count({ where: whereClause }); }, 3)
       ]);
 
       // إحصائيات الذاكرة قصيرة المدى معزولة
@@ -471,12 +479,14 @@ class MemoryService {
     try {
       // مسح ذاكرة المحادثات للعميل مع العزل الأمني
       const deletedMemoryCount = // SECURITY WARNING: Ensure companyId filter is included
-      await prisma.conversationMemory.deleteMany({
-        where: {
-          senderId,
-          companyId // ✅ إضافة companyId للعزل الأمني
-        }
-      });
+      await safeQuery(async () => {
+        return await prisma.conversationMemory.deleteMany({
+          where: {
+            senderId,
+            companyId // ✅ إضافة companyId للعزل الأمني
+          }
+        });
+      }, 5);
 
       // مسح من الذاكرة قصيرة المدى بطريقة آمنة
       const memoryKeyPrefix = `${companyId}_`;
@@ -517,7 +527,8 @@ class MemoryService {
       }
 
       // إذا لم توجد في الذاكرة قصيرة المدى، جلب من قاعدة البيانات مع العزل الأمني
-      const memories = await prisma.conversationMemory.findMany({
+      const memories = await safeQuery(async () => {
+        return await prisma.conversationMemory.findMany({
         where: {
           conversationId,
           senderId,
@@ -525,7 +536,8 @@ class MemoryService {
         },
         orderBy: { timestamp: 'desc' },
         take: limit
-      });
+        });
+      }, 3);
 
       return memories.reverse(); // ترتيب من الأقدم للأحدث
 
@@ -574,7 +586,8 @@ class MemoryService {
     }
 
     try {
-      const memories = await prisma.conversationMemory.findMany({
+      const memories = await safeQuery(async () => {
+        return await prisma.conversationMemory.findMany({
         where: {
           conversationId,
           senderId,
@@ -586,7 +599,8 @@ class MemoryService {
         },
         orderBy: { timestamp: 'desc' },
         take: limit
-      });
+        });
+      }, 3);
 
       return memories;
 
@@ -629,9 +643,11 @@ class MemoryService {
       }
 
       // فحص قاعدة البيانات للسجلات بدون companyId صحيح
-      const allRecords = await prisma.conversationMemory.findMany({
-        select: { companyId: true }
-      });
+      const allRecords = await safeQuery(async () => {
+        return await prisma.conversationMemory.findMany({
+          select: { companyId: true }
+        });
+      }, 3);
 
       const recordsWithoutCompanyId = allRecords.filter(record =>
         !record.companyId ||
@@ -689,17 +705,19 @@ class MemoryService {
 
       // إصلاح السجلات في قاعدة البيانات بدون companyId
       const updatedRecords = // SECURITY WARNING: Ensure companyId filter is included
-      await prisma.conversationMemory.updateMany({
-        where: {
-          OR: [
-            { companyId: null },
-            { companyId: '' }
-          ]
-        },
-        data: {
-          companyId: defaultCompanyId
-        }
-      });
+      await safeQuery(async () => {
+        return await prisma.conversationMemory.updateMany({
+          where: {
+            OR: [
+              { companyId: null },
+              { companyId: '' }
+            ]
+          },
+          data: {
+            companyId: defaultCompanyId
+          }
+        });
+      }, 5);
 
       fixResults.databaseRecordsFixed = updatedRecords.count;
 

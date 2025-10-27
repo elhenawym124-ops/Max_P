@@ -1,17 +1,19 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { useAuth } from '../hooks/useAuthSimple';
 import NotificationDropdown from './notifications/NotificationDropdown';
+import LanguageSwitcher from './common/LanguageSwitcher';
 import {
   Bars3Icon,
   XMarkIcon,
   UserCircleIcon,
   ArrowRightOnRectangleIcon,
   Cog6ToothIcon,
-  BellIcon,
 } from '@heroicons/react/24/outline';
 
 const Header: React.FC = () => {
+  const { t } = useTranslation();
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
@@ -23,12 +25,12 @@ const Header: React.FC = () => {
   };
 
   const navigation = [
-    { name: 'لوحة التحكم', href: '/dashboard' },
-    { name: 'العملاء', href: '/customers' },
-    { name: 'المحادثات', href: '/conversations' },
-    { name: 'المنتجات', href: '/products' },
-    { name: 'الطلبات', href: '/orders' },
-    { name: 'التقارير', href: '/reports' },
+    { name: t('header.dashboard'), href: '/dashboard' },
+    { name: t('header.customers'), href: '/customers' },
+    { name: t('header.conversations'), href: '/conversations' },
+    { name: t('header.products'), href: '/products' },
+    { name: t('header.orders'), href: '/orders' },
+    { name: t('header.reports'), href: '/reports' },
   ];
 
   return (
@@ -44,7 +46,7 @@ const Header: React.FC = () => {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
                 </svg>
               </div>
-              <span className="mr-3 text-xl font-bold text-gray-900">منصة التواصل</span>
+              <span className="mr-3 text-xl font-bold text-gray-900">{t('header.platformName')}</span>
             </Link>
 
             {/* Desktop Navigation */}
@@ -61,8 +63,11 @@ const Header: React.FC = () => {
             </nav>
           </div>
 
-          {/* Right side - Notifications and Profile */}
+          {/* Right side - Language, Notifications and Profile */}
           <div className="flex items-center space-x-4 space-x-reverse">
+            {/* Language Switcher */}
+            <LanguageSwitcher />
+            
             {/* Notifications */}
             <NotificationDropdown />
 
@@ -101,7 +106,7 @@ const Header: React.FC = () => {
                       onClick={() => setIsProfileMenuOpen(false)}
                     >
                       <UserCircleIcon className="h-4 w-4 ml-2" />
-                      الملف الشخصي
+                      {t('header.profile')}
                     </Link>
                     
                     <Link
@@ -110,7 +115,7 @@ const Header: React.FC = () => {
                       onClick={() => setIsProfileMenuOpen(false)}
                     >
                       <Cog6ToothIcon className="h-4 w-4 ml-2" />
-                      الإعدادات
+                      {t('header.settings')}
                     </Link>
                     
                     <div className="border-t border-gray-100">
@@ -119,7 +124,7 @@ const Header: React.FC = () => {
                         className="flex items-center w-full px-4 py-2 text-sm text-red-700 hover:bg-red-50"
                       >
                         <ArrowRightOnRectangleIcon className="h-4 w-4 ml-2" />
-                        تسجيل الخروج
+                        {t('header.logout')}
                       </button>
                     </div>
                   </div>
@@ -162,7 +167,7 @@ const Header: React.FC = () => {
                   className="block px-3 py-2 rounded-md text-base font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-50"
                   onClick={() => setIsMobileMenuOpen(false)}
                 >
-                  الملف الشخصي
+                  {t('header.profile')}
                 </Link>
                 
                 <Link
@@ -170,14 +175,14 @@ const Header: React.FC = () => {
                   className="block px-3 py-2 rounded-md text-base font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-50"
                   onClick={() => setIsMobileMenuOpen(false)}
                 >
-                  الإعدادات
+                  {t('header.settings')}
                 </Link>
                 
                 <button
                   onClick={handleLogout}
                   className="block w-full text-right px-3 py-2 rounded-md text-base font-medium text-red-600 hover:text-red-900 hover:bg-red-50"
                 >
-                  تسجيل الخروج
+                  {t('header.logout')}
                 </button>
               </div>
             </div>

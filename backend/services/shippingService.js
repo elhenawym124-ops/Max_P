@@ -1,4 +1,4 @@
-const { getSharedPrismaClient } = require('./sharedDatabase');
+const { getSharedPrismaClient, safeQuery } = require('./sharedDatabase');
 const prisma = getSharedPrismaClient();
 
 /**
@@ -25,12 +25,14 @@ class ShippingService {
       console.log(`🔍 [SHIPPING] البحث عن شحن للمحافظة: "${governorate}" (normalized: "${normalizedInput}")`);
 
       // جلب جميع مناطق الشحن النشطة للشركة
-      const zones = await prisma.shippingZone.findMany({
-        where: {
-          companyId,
-          isActive: true
-        }
-      });
+      const zones = await safeQuery(async () => {
+        return await prisma.shippingZone.findMany({
+          where: {
+            companyId,
+            isActive: true
+          }
+        });
+      }, 3);
 
       console.log(`📦 [SHIPPING] تم العثور على ${zones.length} منطقة شحن نشطة`);
 
@@ -84,12 +86,14 @@ class ShippingService {
       }
 
       // جلب جميع المحافظات المتاحة
-      const zones = await prisma.shippingZone.findMany({
-        where: {
-          companyId,
-          isActive: true
-        }
-      });
+      const zones = await safeQuery(async () => {
+        return await prisma.shippingZone.findMany({
+          where: {
+            companyId,
+            isActive: true
+          }
+        });
+      }, 3);
 
       // استخراج جميع أسماء المحافظات
       const allGovernorates = [];
@@ -130,12 +134,14 @@ class ShippingService {
    */
   async getAvailableGovernorates(companyId) {
     try {
-      const zones = await prisma.shippingZone.findMany({
-        where: {
-          companyId,
-          isActive: true
-        }
-      });
+      const zones = await safeQuery(async () => {
+        return await prisma.shippingZone.findMany({
+          where: {
+            companyId,
+            isActive: true
+          }
+        });
+      }, 3);
 
       const governorates = [];
       zones.forEach(zone => {

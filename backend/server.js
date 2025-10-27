@@ -89,6 +89,7 @@ const commentRoutes = require('./routes/commentRoutes');
 const branchRoutes = require('./routes/branchRoutes');
 const shippingZoneRoutes = require('./routes/shippingZoneRoutes');
 const promptLibraryRoutes = require('./routes/promptLibraryRoutes');
+const geolocationRoutes = require('./routes/geolocation');
 
 
 
@@ -1290,6 +1291,9 @@ app.use('/api/v1/broadcast', broadcastRoutes);
 
 // ==================== INVENTORY ROUTES ====================
 app.use('/api/v1/inventory', inventoryRoutes);
+
+// ==================== GEOLOCATION ROUTES ====================
+app.use('/api/geolocation', geolocationRoutes);
 
 // Real conversations endpoint with search support - with company isolation and caching
 app.get('/api/v1/conversations', 

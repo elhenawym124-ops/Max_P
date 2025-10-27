@@ -1,5 +1,5 @@
 const { PrismaClient } = require('@prisma/client');
-const { getSharedPrismaClient } = require('./sharedDatabase');
+const { getSharedPrismaClient, safeQuery } = require('./sharedDatabase');
 
 const prisma = getSharedPrismaClient();
 
@@ -21,14 +21,14 @@ class SubscriptionRenewalService {
       this.isProcessing = true;
       //console.log('🔄 Starting automatic renewal process...');
 
-      const { executeWithRetry } = require('./sharedDatabase');
+      
       
       const today = new Date();
       const startOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate());
       const endOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 23, 59, 59);
 
       // Find subscriptions due for renewal today
-      const subscriptionsDue = await executeWithRetry(async () => {
+      const subscriptionsDue = await safeQuery(async () => {
         return await prisma.subscription.findMany({
           where: {
             status: 'ACTIVE',
@@ -48,7 +48,7 @@ class SubscriptionRenewalService {
             }
           }
         });
-      });
+      }, 3);
 
       //console.log(`📋 Found ${subscriptionsDue.length} subscriptions due for renewal`);
 
@@ -72,7 +72,7 @@ class SubscriptionRenewalService {
     try {
       //console.log(`🔄 Renewing subscription ${subscription.id} for ${subscription.company.name}`);
 
-      const { executeWithRetry } = require('./sharedDatabase');
+      
       
       // Calculate next billing date
       const nextBillingDate = this.calculateNextBillingDate(
@@ -84,15 +84,15 @@ class SubscriptionRenewalService {
       const invoice = await this.createRenewalInvoice(subscription);
 
       // Update subscription
-      await executeWithRetry(async () => {
-        await prisma.subscription.update({
+      await safeQuery(async () => {
+        return await prisma.subscription.update({
           where: { id: subscription.id },
           data: {
             nextBillingDate,
             updatedAt: new Date()
           }
         });
-      });
+      }, 5);
 
       //console.log(`✅ Subscription ${subscription.id} renewed successfully`);
       //console.log(`📅 Next billing date: ${nextBillingDate.toISOString().split('T')[0]}`);
@@ -140,7 +140,7 @@ class SubscriptionRenewalService {
    * Create renewal invoice
    */
   async createRenewalInvoice(subscription) {
-    const { executeWithRetry } = require('./sharedDatabase');
+    
     
     const invoiceNumber = await this.generateInvoiceNumber();
     const issueDate = new Date();
@@ -151,7 +151,7 @@ class SubscriptionRenewalService {
     const taxAmount = subtotal * taxRate;
     const totalAmount = subtotal + taxAmount;
 
-    const invoice = await executeWithRetry(async () => {
+    const invoice = await safeQuery(async () => {
       return await prisma.invoice.create({
         data: {
           invoiceNumber,
@@ -183,7 +183,7 @@ class SubscriptionRenewalService {
           items: true
         }
       });
-    });
+    }, 5);
 
     return invoice;
   }
@@ -250,11 +250,11 @@ class SubscriptionRenewalService {
     try {
       //console.log(`⚠️ Handling renewal failure for subscription ${subscription.id}`);
 
-      const { executeWithRetry } = require('./sharedDatabase');
+      
       
       // Update subscription with failure info
-      await executeWithRetry(async () => {
-        await prisma.subscription.update({
+      await safeQuery(async () => {
+        return await prisma.subscription.update({
           where: { id: subscription.id },
           data: {
             metadata: {
@@ -265,13 +265,13 @@ class SubscriptionRenewalService {
             }
           }
         });
-      });
+      }, 5);
 
       // If too many failures, suspend subscription
       const failureCount = (subscription.metadata?.renewalFailureCount || 0) + 1;
       if (failureCount >= 3) {
-        await executeWithRetry(async () => {
-          await prisma.subscription.update({
+        await safeQuery(async () => {
+          return await prisma.subscription.update({
             where: { id: subscription.id },
             data: {
               status: 'SUSPENDED',
@@ -282,7 +282,7 @@ class SubscriptionRenewalService {
               }
             }
           });
-        });
+        }, 5);
 
         //console.log(`⚠️ Subscription ${subscription.id} suspended due to multiple renewal failures`);
       }
@@ -322,18 +322,6 @@ class SubscriptionRenewalService {
   }
 
   /**
-   * Manual renewal for a subscription
-   */
-  async manualRenewal(subscriptionId, options = {}) {
-    try {
-      const { executeWithRetry } = require('./sharedDatabase');
-      
-      const subscription = await executeWithRetry(async () => {
-        return await prisma.subscription.findUnique({
-          where: { id: subscriptionId },
-          include: {
-            company: {
-              select: {
                 id: true,
                 name: true,
                 email: true
@@ -341,7 +329,7 @@ class SubscriptionRenewalService {
             }
           }
         });
-      });
+      }, 3);
 
       if (!subscription) {
         throw new Error('Subscription not found');
@@ -387,9 +375,8 @@ class SubscriptionRenewalService {
    */
   async getRenewalStats(dateFrom, dateTo) {
     try {
-      const { executeWithRetry } = require('./sharedDatabase');
       
-      const stats = await executeWithRetry(async () => {
+      const stats = await safeQuery(async () => {
         return await prisma.subscription.groupBy({
           by: ['status'],
           where: {
@@ -405,7 +392,7 @@ class SubscriptionRenewalService {
             price: true
           }
         });
-      });
+      }, 4);
 
       return {
         success: true,

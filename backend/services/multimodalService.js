@@ -69,8 +69,7 @@ class MultimodalService {
 
   async getAvailableProducts(companyId = null) {
     try {
-      const { PrismaClient } = require('@prisma/client');
-      const prisma = new PrismaClient();
+      const { getSharedPrismaClient, safeQuery } = require('./sharedDatabase');
 
       // 🔐 فلترة المنتجات حسب الشركة
       const whereClause = { isActive: true };
@@ -79,14 +78,17 @@ class MultimodalService {
         //console.log(`🔐 [MULTIMODAL] Filtering products for company: ${companyId}`);
       }
 
-      const products = await prisma.product.findMany({
-        where: whereClause,
-        include: {
-          variants: {
-            where: { isActive: true }
+      const products = await safeQuery(async () => {
+        const prisma = getSharedPrismaClient();
+        return await prisma.product.findMany({
+          where: whereClause,
+          include: {
+            variants: {
+              where: { isActive: true }
+            }
           }
-        }
-      });
+        });
+      }, 3);
 
       let productsList = '';
       products.forEach(product => {
@@ -103,7 +105,6 @@ class MultimodalService {
         productsList += '\n';
       });
 
-      await prisma.$disconnect();
       return productsList || 'لا توجد منتجات متاحة حالياً';
     } catch (error) {
       console.error('❌ Error getting available products:', error);
@@ -114,8 +115,7 @@ class MultimodalService {
   // دالة للحصول على المنتجات كـ array للمقارنة
   async getProductsArray(companyId = null) {
     try {
-      const { PrismaClient } = require('@prisma/client');
-      const prisma = new PrismaClient();
+      const { getSharedPrismaClient, safeQuery } = require('./sharedDatabase');
 
       // 🔐 فلترة المنتجات حسب الشركة
       const whereClause = { isActive: true };
@@ -124,17 +124,19 @@ class MultimodalService {
         //console.log(`🔐 [MULTIMODAL] Filtering products array for company: ${companyId}`);
       }
 
-      const products = await prisma.product.findMany({
-        where: whereClause,
-        include: {
-          variants: {
-            where: { isActive: true }
-          },
-          category: true
-        }
-      });
+      const products = await safeQuery(async () => {
+        const prisma = getSharedPrismaClient();
+        return await prisma.product.findMany({
+          where: whereClause,
+          include: {
+            variants: {
+              where: { isActive: true }
+            },
+            category: true
+          }
+        });
+      }, 3);
 
-      await prisma.$disconnect();
       return products;
     } catch (error) {
       console.error('❌ [MULTIMODAL] Error getting products array:', error);

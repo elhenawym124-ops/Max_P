@@ -1,4 +1,4 @@
-const { PrismaClient } = require('@prisma/client');
+const { getSharedPrismaClient } = require('./sharedDatabase');
 const memoryService = require('./memoryService');
 const ContinuousLearningServiceV2 = require('./continuousLearningServiceV2');
 const QualityMonitorService = require('./qualityMonitorService');
@@ -8,7 +8,7 @@ const ResponseOptimizer = require('./responseOptimizer');
 const AIErrorHandler = require('./aiErrorHandler'); // نظام معالجة أخطاء الذكاء الاصطناعي
 const aiResponseMonitor = require('./aiResponseMonitor'); // نظام مراقبة ردود AI
 
-const prisma = new PrismaClient();
+const prisma = getSharedPrismaClient(); // Use shared database connection
 
 class AIAgentService {
   constructor() {

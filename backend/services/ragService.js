@@ -1,4 +1,4 @@
-const { getSharedPrismaClient } = require('./sharedDatabase');
+const { getSharedPrismaClient, safeQuery } = require('./sharedDatabase');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 
 const prisma = getSharedPrismaClient();
@@ -150,16 +150,18 @@ class RAGService {
           //console.log(`⚠️ [RAG] تحميل جميع المنتجات (لا يوجد companyId)`);
         }
 
-        products = await prisma.product.findMany({
-          where: whereClause,
-          include: {
-            category: true,
-            variants: {
-              where: { isActive: true },
-              orderBy: { sortOrder: 'asc' }
+        products = await safeQuery(async () => {
+          return await prisma.product.findMany({
+            where: whereClause,
+            include: {
+              category: true,
+              variants: {
+                where: { isActive: true },
+                orderBy: { sortOrder: 'asc' }
+              }
             }
-          }
-        });
+          });
+        }, 3);
 
         //console.log(`✅ [RAG] تم تحميل ${products.length} منتج من قاعدة البيانات بنجاح`);
         break; // نجح الاتصال، اخرج من الحلقة
@@ -766,19 +768,20 @@ class RAGService {
 
   async getCustomerOrders(customerId) {
     try {
-      const orders = await prisma.order.findMany({
-        where: { companyId: companyId },
-        where: { customerId },
-        orderBy: { createdAt: 'desc' },
-        take: 3,
-        include: {
-          items: {
-            include: {
-              product: true
+      const orders = await safeQuery(async () => {
+        return await prisma.order.findMany({
+          where: { customerId },
+          orderBy: { createdAt: 'desc' },
+          take: 3,
+          include: {
+            items: {
+              include: {
+                product: true
+              }
             }
           }
-        }
-      });
+        });
+      }, 3);
 
       return orders.map(order => ({
         type: 'order',

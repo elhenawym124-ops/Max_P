@@ -1,7 +1,9 @@
 import React, { useState } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../hooks/useAuthSimple';
 import NotificationDropdown from '../notifications/NotificationDropdown';
+import LanguageSwitcher from '../common/LanguageSwitcher';
 import {
   UserCircleIcon,
   ArrowRightOnRectangleIcon,
@@ -44,6 +46,7 @@ interface LayoutProps {
 }
 
 const Layout: React.FC<LayoutProps> = ({ children }) => {
+  const { t } = useTranslation();
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
@@ -104,7 +107,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                 <ChatBubbleLeftRightIcon className="h-6 w-6 text-white" />
               </div>
               <h1 className="text-xl font-bold text-gray-900 dark:text-white">
-                منصة التواصل
+                {t('sidebar.platformName')}
               </h1>
             </div>
           </div>
@@ -113,11 +116,11 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
               {/* القسم الرئيسي */}
               <div className="mb-6">
                 <h3 className="px-4 mb-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                  الرئيسية
+                  {t('sidebar.mainSection')}
                 </h3>
                 <div className="space-y-1">
                   <NavLink to="/dashboard" icon={<ChartBarIcon className="h-5 w-5" />}>
-                    لوحة التحكم
+                    {t('sidebar.dashboard')}
                   </NavLink>
                 </div>
               </div>
@@ -125,25 +128,25 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
               {/* قسم المحادثات والعملاء */}
               <div className="mb-6">
                 <h3 className="px-4 mb-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                  المحادثات والعملاء
+                  {t('sidebar.conversationsSection')}
                 </h3>
                 <div className="space-y-1">
                   <NavLink to="/conversations-improved" icon={<ChatBubbleLeftRightIcon className="h-5 w-5" />} variant="primary">
-                    المحادثات المحسنة
+                    {t('sidebar.conversationsImproved')}
                   </NavLink>
                   {/* <NavLink to="/comments" icon={<ChatBubbleLeftRightIcon className="h-5 w-5" />}>
                     إدارة التعليقات
                   </NavLink> */}
                   {/* NEW: Unified Comments Management Link */}
                   <NavLink to="/unified-comments" icon={<ChatBubbleLeftRightIcon className="h-5 w-5" />} variant="success">
-                    إدارة المنشورات و التعليقات
+                    {t('sidebar.unifiedComments')}
                   </NavLink>
                   {/* NEW: Posts Management Link */}
                   {/* <NavLink to="/posts" icon={<ChatBubbleLeftRightIcon className="h-5 w-5" />} variant="primary">
                     إدارة المنشورات
                   </NavLink> */}
                   <NavLink to="/customers" icon={<UsersIcon className="h-5 w-5" />}>
-                    العملاء
+                    {t('sidebar.customers')}
                   </NavLink>
                 </div>
               </div>
@@ -151,17 +154,17 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
               {/* قسم الأعمال والفرص */}
               <div className="mb-6">
                 <h3 className="px-4 mb-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                  الأعمال والفرص
+                  {t('sidebar.businessSection')}
                 </h3>
                 <div className="space-y-1">
                   {/* <NavLink to="/opportunities" icon={<BuildingOfficeIcon className="h-5 w-5" />}>
                     الفرص التجارية
                   </NavLink> */}
                   <NavLink to="/appointments" icon={<CalendarIcon className="h-5 w-5" />}>
-                    المواعيد والتقويم
+                    {t('sidebar.appointments')}
                   </NavLink>
                   <NavLink to="/tasks" icon={<CheckCircleIcon className="h-5 w-5" />}>
-                    المهام والمشاريع
+                    {t('sidebar.tasks')}
                   </NavLink>
                 </div>
               </div>
@@ -169,11 +172,11 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
               {/* قسم التسويق */}
               <div className="mb-6">
                 <h3 className="px-4 mb-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                  التسويق
+                  {t('sidebar.marketingSection')}
                 </h3>
                 <div className="space-y-1">
                   <NavLink to="/broadcast" icon={<SpeakerWaveIcon className="h-5 w-5" />} variant="primary">
-                    لوحة البرودكاست
+                    {t('sidebar.broadcast')}
                   </NavLink>
                 </div>
               </div>
@@ -181,26 +184,26 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
               {/* قسم التجارة الإلكترونية */}
               <div className="mb-6">
                 <h3 className="px-4 mb-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                  التجارة الإلكترونية
+                  {t('sidebar.ecommerceSection')}
                 </h3>
                 <div className="space-y-1">
                   <NavLink to="/products" icon={<ShoppingBagIcon className="h-5 w-5" />}>
-                    المنتجات
+                    {t('sidebar.products')}
                   </NavLink>
                   <NavLink to="/categories" icon={<TagIcon className="h-5 w-5" />}>
-                    فئات المنتجات
+                    {t('sidebar.categories')}
                   </NavLink>
                   <NavLink to="/orders" icon={<ArchiveBoxIcon className="h-5 w-5" />}>
-                    الطلبات
+                    {t('sidebar.orders')}
                   </NavLink>
                   <NavLink to="/inventory" icon={<ClipboardDocumentListIcon className="h-5 w-5" />}>
-                    إدارة المخزون
+                    {t('sidebar.inventory')}
                   </NavLink>
                   <NavLink to="/coupons" icon={<TicketIcon className="h-5 w-5" />}>
-                    الكوبونات والخصومات
+                    {t('sidebar.coupons')}
                   </NavLink>
                   <NavLink to="/store-settings" icon={<MapPinIcon className="h-5 w-5" />} variant="primary">
-                    إعدادات المتجر
+                    {t('sidebar.storeSettings')}
                   </NavLink>
                 </div>
               </div>
@@ -208,17 +211,17 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
               {/* قسم الفواتير والمدفوعات */}
               <div className="mb-6">
                 <h3 className="px-4 mb-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                  الفواتير والمدفوعات
+                  {t('sidebar.billingSection')}
                 </h3>
                 <div className="space-y-1">
                   <NavLink to="/invoices" icon={<DocumentTextIcon className="h-5 w-5" />}>
-                    فواتيري
+                    {t('sidebar.myInvoices')}
                   </NavLink>
                   <NavLink to="/payments" icon={<BanknotesIcon className="h-5 w-5" />}>
-                    مدفوعاتي
+                    {t('sidebar.myPayments')}
                   </NavLink>
                   <NavLink to="/subscription" icon={<CreditCardIcon className="h-5 w-5" />} variant="primary">
-                    اشتراكي
+                    {t('sidebar.mySubscription')}
                   </NavLink>
                 </div>
               </div>
@@ -226,14 +229,14 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
               {/* قسم التحليلات والتقارير */}
               <div className="mb-6">
                 <h3 className="px-4 mb-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                  التحليلات والتقارير
+                  {t('sidebar.analyticsSection')}
                 </h3>
                 <div className="space-y-1">
                   <NavLink to="/reports" icon={<ChartBarIcon className="h-5 w-5" />}>
-                    التقارير
+                    {t('sidebar.reports')}
                   </NavLink>
                   <NavLink to="/analytics" icon={<PresentationChartLineIcon className="h-5 w-5" />}>
-                    التحليلات المتقدمة
+                    {t('sidebar.advancedAnalytics')}
                   </NavLink>
                 </div>
               </div>
@@ -241,11 +244,11 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
               {/* قسم الذكاء الاصطناعي */}
               <div className="mb-6">
                 <h3 className="px-4 mb-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                  الذكاء الاصطناعي
+                  {t('sidebar.aiSection')}
                 </h3>
                 <div className="space-y-1">
                   <NavLink to="/ai-management" icon={<BeakerIcon className="h-5 w-5" />} variant="primary">
-                    إدارة AI Agent
+                    {t('sidebar.aiManagement')}
                   </NavLink>
                 </div>
               </div>
@@ -253,17 +256,17 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
               {/* قسم الأدوات */}
               <div className="mb-6">
                 <h3 className="px-4 mb-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                  الأدوات
+                  {t('sidebar.toolsSection')}
                 </h3>
                 <div className="space-y-1">
                   <NavLink to="/notifications" icon={<BellIcon className="h-5 w-5" />}>
-                    الإشعارات
+                    {t('sidebar.notifications')}
                   </NavLink>
                   <NavLink to="/reminders" icon={<BellAlertIcon className="h-5 w-5" />}>
-                    التذكيرات
+                    {t('sidebar.reminders')}
                   </NavLink>
                   <NavLink to="/notification-settings" icon={<CogIcon className="h-5 w-5" />}>
-                    إعدادات الإشعارات
+                    {t('sidebar.notificationSettings')}
                   </NavLink>
                 </div>
               </div>
@@ -271,17 +274,17 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
               {/* قسم التعلم والتطوير */}
               <div className="mb-6">
                 <h3 className="px-4 mb-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                  التعلم والتطوير
+                  {t('sidebar.learningSection')}
                 </h3>
                 <div className="space-y-1">
                   <NavLink to="/learning/settings" icon={<CogIcon className="h-5 w-5" />}>
-                    إعدادات التعلم
+                    {t('sidebar.learningSettings')}
                   </NavLink>
                   <NavLink to="/success-analytics" icon={<PresentationChartLineIcon className="h-5 w-5" />} variant="success">
-                    تحليلات أنماط النجاح
+                    {t('sidebar.successAnalytics')}
                   </NavLink>
                   <NavLink to="/pattern-management" icon={<WrenchScrewdriverIcon className="h-5 w-5" />}>
-                    إدارة الأنماط
+                    {t('sidebar.patternManagement')}
                   </NavLink>
                 </div>
               </div>
@@ -290,17 +293,17 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
               {(user?.role === 'SUPER_ADMIN' || user?.role === 'COMPANY_ADMIN') && (
                 <div className="mb-6">
                   <h3 className="px-4 mb-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                    الإدارة المتقدمة
+                    {t('sidebar.advancedAdminSection')}
                   </h3>
                   <div className="space-y-1">
                     <NavLink to="/admin/dashboard" icon={<WrenchScrewdriverIcon className="h-5 w-5" />} variant="danger">
-                      لوحة التحكم الإدارية
+                      {t('sidebar.adminDashboard')}
                     </NavLink>
                     <NavLink to="/monitoring" icon={<ChartBarIcon className="h-5 w-5" />} variant="success">
-                      مراقبة النظام
+                      {t('sidebar.systemMonitoring')}
                     </NavLink>
                     <NavLink to="/alert-settings" icon={<ExclamationTriangleIcon className="h-5 w-5" />} variant="warning">
-                      إعدادات التنبيهات
+                      {t('sidebar.alertSettings')}
                     </NavLink>
                   </div>
                 </div>
@@ -309,17 +312,17 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
               {/* قسم الجودة والأداء */}
               <div className="mb-6">
                 <h3 className="px-4 mb-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                  الجودة والأداء
+                  {t('sidebar.qualitySection')}
                 </h3>
                 <div className="space-y-1">
                   {/* <NavLink to="/quality" icon={<CheckCircleIcon className="h-5 w-5" />} variant="success">
                     جودة الردود
                   </NavLink> */}
                   <NavLink to="/quality-advanced" icon={<PresentationChartLineIcon className="h-5 w-5" />} variant="primary">
-                    لوحة الجودة المتقدمة
+                    {t('sidebar.advancedQuality')}
                   </NavLink>
                   <NavLink to="/ai-quality" icon={<BeakerIcon className="h-5 w-5" />}>
-                    التقييم الذكي
+                    {t('sidebar.aiQuality')}
                   </NavLink>
                 </div>
               </div>
@@ -328,11 +331,11 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
               {user?.role === 'SUPER_ADMIN' && (
                 <div className="mb-6">
                   <h3 className="px-4 mb-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                    إدارة النظام
+                    {t('sidebar.systemManagementSection')}
                   </h3>
                   <div className="space-y-1">
                     <NavLink to="/companies" icon={<BuildingOfficeIcon className="h-5 w-5" />} variant="warning">
-                      إدارة الشركات
+                      {t('sidebar.companiesManagement')}
                     </NavLink>
                   </div>
                 </div>
@@ -342,14 +345,14 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
               {(user?.role === 'COMPANY_ADMIN' || user?.role === 'SUPER_ADMIN') && (
                 <div className="mb-6">
                   <h3 className="px-4 mb-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                    إدارة الشركة
+                    {t('sidebar.companyManagementSection')}
                   </h3>
                   <div className="space-y-1">
                     <NavLink to="/users" icon={<UserGroupIcon className="h-5 w-5" />}>
-                      إدارة المستخدمين
+                      {t('sidebar.usersManagement')}
                     </NavLink>
                     <NavLink to="/roles" icon={<KeyIcon className="h-5 w-5" />}>
-                      إدارة الأدوار والصلاحيات
+                      {t('sidebar.rolesManagement')}
                     </NavLink>
                   </div>
                 </div>
@@ -358,14 +361,14 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
               {/* قسم الصفحات القانونية */}
               <div className="mb-6">
                 <h3 className="px-4 mb-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                  الصفحات القانونية
+                  {t('sidebar.legalSection')}
                 </h3>
                 <div className="space-y-1">
                   <NavLink to="/terms" icon={<DocumentCheckIcon className="h-5 w-5" />}>
-                    الشروط والأحكام
+                    {t('sidebar.terms')}
                   </NavLink>
                   <NavLink to="/privacy" icon={<ShieldExclamationIcon className="h-5 w-5" />}>
-                    سياسة الخصوصية
+                    {t('sidebar.privacy')}
                   </NavLink>
                 </div>
               </div>
@@ -373,7 +376,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
               {/* الإعدادات */}
               <div className="mt-auto pt-4 border-t border-gray-200 dark:border-gray-700">
                 <NavLink to="/settings" icon={<CogIcon className="h-5 w-5" />}>
-                  الإعدادات
+                  {t('sidebar.settings')}
                 </NavLink>
               </div>
             </div>
@@ -393,20 +396,23 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.732-.833-2.5 0L4.268 19.5c-.77.833.192 2.5 1.732 2.5z" />
                     </svg>
                     <span className="text-sm font-medium text-orange-700 ml-2">
-                      تم تسجيل الدخول بواسطة مدير النظام 🔑
+                      {t('sidebar.superAdminLogin')}
                     </span>
                     <button
                       onClick={() => window.location.href = '/super-admin/companies'}
                       className="bg-orange-100 hover:bg-orange-200 text-orange-700 px-3 py-1 rounded text-sm mr-3 transition-colors"
                     >
-                      العودة لإدارة الشركات
+                      {t('sidebar.backToCompanies')}
                     </button>
                   </div>
                 )}
                 <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
-                  مرحباً بك
+                  {t('sidebar.welcome')}
                 </h2>
                 <div className="flex items-center space-x-4 space-x-reverse">
+                  {/* Language Switcher */}
+                  <LanguageSwitcher />
+                  
                   {/* Notifications */}
                   <NotificationDropdown />
 
@@ -446,7 +452,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                             onClick={() => setIsProfileMenuOpen(false)}
                           >
                             <UserCircleIcon className="h-4 w-4 ml-2" />
-                            الملف الشخصي
+                            {t('sidebar.profile')}
                           </Link>
 
                           <Link
@@ -455,7 +461,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                             onClick={() => setIsProfileMenuOpen(false)}
                           >
                             <Cog6ToothIcon className="h-4 w-4 ml-2" />
-                            الإعدادات
+                            {t('sidebar.settings')}
                           </Link>
 
                           {/* زر العودة لمدير النظام */}
@@ -466,7 +472,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                               onClick={() => setIsProfileMenuOpen(false)}
                             >
                               <ArrowLeftIcon className="h-4 w-4 ml-2" />
-                              العودة لإدارة الشركات
+                              {t('sidebar.backToCompanies')}
                             </Link>
                           )}
 
@@ -476,7 +482,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                               className="flex items-center w-full px-4 py-2 text-sm text-red-700 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20"
                             >
                               <ArrowRightOnRectangleIcon className="h-4 w-4 ml-2" />
-                              تسجيل الخروج
+                              {t('sidebar.logout')}
                             </button>
                           </div>
                         </div>

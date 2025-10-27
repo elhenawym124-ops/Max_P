@@ -8,6 +8,8 @@ import { Toaster } from 'react-hot-toast';
 import App from './App';
 import ErrorBoundary from './components/ErrorBoundary';
 
+// Import i18n configuration
+import './i18n/config';
 
 import './styles/index.css';
 

@@ -3,11 +3,11 @@
  * Pattern Cleanup Service for removing duplicates and similar patterns
  */
 
-const { PrismaClient } = require('@prisma/client');
+const { getSharedPrismaClient } = require('./sharedDatabase');
 
 class PatternCleanupService {
   constructor() {
-    this.prisma = new PrismaClient();
+    this.prisma = getSharedPrismaClient(); // Use shared database connection
     //console.log('🧹 [PatternCleanup] Service initialized');
   }
 

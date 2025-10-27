@@ -149,8 +149,8 @@ class SimpleMonitor {
    */
   async createSilentErrorNotification(errorRecord, context) {
     try {
-      const { PrismaClient } = require('@prisma/client');
-      const prisma = new PrismaClient();
+      const { getSharedPrismaClient, safeQuery } = require('./sharedDatabase');
+      const prisma = getSharedPrismaClient();
 
       // إنشاء إشعار للمطورين
       const notificationData = {
@@ -175,9 +175,11 @@ class SimpleMonitor {
         };
       }
 
-      await prisma.notification.create({
-        data: notificationData
-      });
+      await safeQuery(async () => {
+        return await prisma.notification.create({
+          data: notificationData
+        });
+      }, 5);
 
       //console.log('📊 [NOTIFICATION] Silent error notification created for developers');
 

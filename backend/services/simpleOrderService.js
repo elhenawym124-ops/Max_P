@@ -1,9 +1,12 @@
-const { PrismaClient } = require('@prisma/client');
-const prisma = new PrismaClient();
+const { getSharedPrismaClient, safeQuery } = require('./sharedDatabase');
 
 class SimpleOrderService {
   constructor() {
     //console.log('🛒 SimpleOrderService initialized');
+  }
+
+  getPrisma() {
+    return getSharedPrismaClient();
   }
 
   // إنشاء طلب بسيط من المحادثة

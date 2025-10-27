@@ -5,7 +5,7 @@
  * يراقب ردود الـ AI ويرسل إشعارات في حالة الفشل أو عدم الرد
  */
 
-const { getSharedPrismaClient, initializeSharedDatabase, executeWithRetry } = require('../services/sharedDatabase');
+const { getSharedPrismaClient, safeQuery } = require('../services/sharedDatabase');
 const prisma = getSharedPrismaClient();
 
 class AIResponseMonitor {
@@ -87,7 +87,8 @@ class AIResponseMonitor {
       }
 
       // حفظ الإشعار
-      await prisma.$executeRaw`
+      await safeQuery(async () => {
+        return await prisma.$executeRaw`
         INSERT INTO ai_notifications (
           id, companyId, type, severity, title, message, 
           metadata, isRead, createdAt
@@ -102,7 +103,8 @@ class AIResponseMonitor {
           false,
           NOW()
         )
-      `;
+        `;
+      }, 6);
     } catch (error) {
       console.error('❌ [AI-MONITOR] Error saving notification to database:', error);
     }
@@ -113,12 +115,14 @@ class AIResponseMonitor {
    */
   async checkNotificationsTableExists() {
     try {
-      const result = await prisma.$queryRaw`
+      const result = await safeQuery(async () => {
+        return await prisma.$queryRaw`
         SELECT COUNT(*) as count 
         FROM information_schema.tables 
         WHERE table_schema = DATABASE() 
         AND table_name = 'ai_notifications'
-      `;
+        `;
+      }, 3);
       return result[0].count > 0;
     } catch (error) {
       return false;
@@ -130,7 +134,8 @@ class AIResponseMonitor {
    */
   async createNotificationsTable() {
     try {
-      await prisma.$executeRaw`
+      await safeQuery(async () => {
+        return await prisma.$executeRaw`
         CREATE TABLE IF NOT EXISTS ai_notifications (
           id VARCHAR(191) NOT NULL PRIMARY KEY,
           companyId VARCHAR(191) NOT NULL,
@@ -145,7 +150,8 @@ class AIResponseMonitor {
           INDEX idx_company_created (companyId, createdAt),
           INDEX idx_company_read (companyId, isRead)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-      `;
+        `;
+      }, 6);
       console.log('✅ [AI-MONITOR] Notifications table created');
     } catch (error) {
       console.error('❌ [AI-MONITOR] Error creating notifications table:', error);
@@ -310,7 +316,8 @@ class AIResponseMonitor {
         await this.createFailureLogsTable();
       }
 
-      await prisma.$executeRaw`
+      await safeQuery(async () => {
+        return await prisma.$executeRaw`
         INSERT INTO ai_failure_logs (
           id, companyId, conversationId, customerId, 
           errorType, errorMessage, context, createdAt
@@ -324,7 +331,8 @@ class AIResponseMonitor {
           ${JSON.stringify(failure.context || {})},
           NOW()
         )
-      `;
+        `;
+      }, 6);
     } catch (error) {
       console.error('❌ [AI-MONITOR] Error saving failure log:', error);
     }
@@ -335,12 +343,14 @@ class AIResponseMonitor {
    */
   async checkFailureLogsTableExists() {
     try {
-      const result = await prisma.$queryRaw`
+      const result = await safeQuery(async () => {
+        return await prisma.$queryRaw`
         SELECT COUNT(*) as count 
         FROM information_schema.tables 
         WHERE table_schema = DATABASE() 
         AND table_name = 'ai_failure_logs'
-      `;
+        `;
+      }, 3);
       return result[0].count > 0;
     } catch (error) {
       return false;
@@ -352,7 +362,8 @@ class AIResponseMonitor {
    */
   async createFailureLogsTable() {
     try {
-      await prisma.$executeRaw`
+      await safeQuery(async () => {
+        return await prisma.$executeRaw`
         CREATE TABLE IF NOT EXISTS ai_failure_logs (
           id VARCHAR(191) NOT NULL PRIMARY KEY,
           companyId VARCHAR(191) NOT NULL,
@@ -365,7 +376,8 @@ class AIResponseMonitor {
           INDEX idx_company_created (companyId, createdAt),
           INDEX idx_error_type (errorType)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-      `;
+        `;
+      }, 6);
       console.log('✅ [AI-MONITOR] Failure logs table created');
     } catch (error) {
       console.error('❌ [AI-MONITOR] Error creating failure logs table:', error);
@@ -379,7 +391,8 @@ class AIResponseMonitor {
     try {
       const startTime = new Date(Date.now() - timeRange);
 
-      const stats = await prisma.$queryRaw`
+      const stats = await safeQuery(async () => {
+        return await prisma.$queryRaw`
         SELECT 
           errorType,
           COUNT(*) as count,
@@ -389,14 +402,17 @@ class AIResponseMonitor {
           AND createdAt >= ${startTime}
         GROUP BY errorType
         ORDER BY count DESC
-      `;
+        `;
+      }, 4);
 
-      const totalFailures = await prisma.$queryRaw`
+      const totalFailures = await safeQuery(async () => {
+        return await prisma.$queryRaw`
         SELECT COUNT(*) as total
         FROM ai_failure_logs
         WHERE companyId = ${companyId}
           AND createdAt >= ${startTime}
-      `;
+        `;
+      }, 4);
 
       return {
         totalFailures: Number(totalFailures[0]?.total || 0),
@@ -430,7 +446,9 @@ class AIResponseMonitor {
       query += ` ORDER BY createdAt DESC LIMIT ?`;
       params.push(limit);
 
-      const notifications = await prisma.$queryRawUnsafe(query, ...params);
+      const notifications = await safeQuery(async () => {
+        return await prisma.$queryRawUnsafe(query, ...params);
+      }, 3);
 
       return notifications.map(n => ({
         ...n,
@@ -448,11 +466,13 @@ class AIResponseMonitor {
   async markNotificationAsRead(notificationId, companyId) {
     try {
       // 🔐 SECURITY: عزل الشركات - التأكد أن الإشعار يخص الشركة
-      const result = await prisma.$executeRaw`
+      const result = await safeQuery(async () => {
+        return await prisma.$executeRaw`
         UPDATE ai_notifications
         SET isRead = true, readAt = NOW()
         WHERE id = ${notificationId} AND companyId = ${companyId}
-      `;
+        `;
+      }, 5);
       
       if (result === 0) {
         console.warn(`⚠️ [AI-MONITOR] Notification ${notificationId} not found or doesn't belong to company ${companyId}`);
@@ -471,11 +491,13 @@ class AIResponseMonitor {
    */
   async markAllNotificationsAsRead(companyId) {
     try {
-      await prisma.$executeRaw`
+      await safeQuery(async () => {
+        return await prisma.$executeRaw`
         UPDATE ai_notifications
         SET isRead = true, readAt = NOW()
         WHERE companyId = ${companyId} AND isRead = false
-      `;
+        `;
+      }, 5);
       return true;
     } catch (error) {
       console.error('❌ [AI-MONITOR] Error marking all notifications as read:', error);
@@ -495,19 +517,23 @@ class AIResponseMonitor {
       let result;
       if (companyId) {
         // 🔐 SECURITY: حذف إشعارات شركة محددة فقط
-        result = await prisma.$executeRaw`
+        result = await safeQuery(async () => {
+          return await prisma.$executeRaw`
           DELETE FROM ai_notifications
           WHERE createdAt < ${cutoffDate} 
             AND isRead = true
             AND companyId = ${companyId}
-        `;
+          `;
+        }, 6);
         console.log(`🧹 [AI-MONITOR] Cleaned up ${result} old notifications for company ${companyId}`);
       } else {
         // حذف جميع الإشعارات القديمة (للمسؤولين فقط)
-        result = await prisma.$executeRaw`
+        result = await safeQuery(async () => {
+          return await prisma.$executeRaw`
           DELETE FROM ai_notifications
           WHERE createdAt < ${cutoffDate} AND isRead = true
-        `;
+          `;
+        }, 6);
         console.log(`🧹 [AI-MONITOR] Cleaned up ${result} old notifications (all companies)`);
       }
 
@@ -523,11 +549,13 @@ class AIResponseMonitor {
    */
   async getUnreadCount(companyId) {
     try {
-      const result = await prisma.$queryRaw`
+      const result = await safeQuery(async () => {
+        return await prisma.$queryRaw`
         SELECT COUNT(*) as count
         FROM ai_notifications
         WHERE companyId = ${companyId} AND isRead = false
-      `;
+        `;
+      }, 3);
       return Number(result[0]?.count || 0);
     } catch (error) {
       console.error('❌ [AI-MONITOR] Error getting unread count:', error);

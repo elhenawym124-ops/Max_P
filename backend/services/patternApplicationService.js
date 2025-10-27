@@ -3,11 +3,11 @@
  * Pattern Application Service - تربط الأنماط المكتشفة بالـ AI الفعلي
  */
 
-const { PrismaClient } = require('@prisma/client');
+const { getSharedPrismaClient } = require('./sharedDatabase');
 
 class PatternApplicationService {
   constructor() {
-    this.prisma = new PrismaClient();
+    this.prisma = getSharedPrismaClient(); // Use shared database connection
     this.patternCache = new Map(); // تخزين مؤقت للأنماط المعتمدة
     this.cacheExpiry = 5 * 60 * 1000; // 5 دقائق
     this.lastCacheUpdate = new Map();

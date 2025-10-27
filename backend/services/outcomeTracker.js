@@ -5,11 +5,11 @@
  * وتسجل فعالية كل رد
  */
 
-const { PrismaClient } = require('@prisma/client');
+const { getSharedPrismaClient } = require('./sharedDatabase');
 
 class OutcomeTracker {
   constructor() {
-    this.prisma = new PrismaClient();
+    this.prisma = getSharedPrismaClient(); // Use shared database connection
     this.trackingQueue = new Map(); // قائمة انتظار للتتبع
     this.outcomeTypes = {
       PURCHASE: 'purchase',

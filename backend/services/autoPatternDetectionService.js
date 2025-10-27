@@ -4,12 +4,11 @@
  */
 
 const PatternDetector = require('./patternDetector');
-const { PrismaClient } = require('@prisma/client');
+const { getSharedPrismaClient, safeQuery } = require('./sharedDatabase');
 
 class AutoPatternDetectionService {
   constructor() {
     this.detector = new PatternDetector();
-    this.prisma = new PrismaClient();
     this.isRunning = false;
     this.intervalId = null;
     this.detectionInterval = 2 * 60 * 60 * 1000; // كل ساعتين
@@ -20,13 +19,23 @@ class AutoPatternDetectionService {
   }
 
   /**
+   * Get Prisma client instance
+   */
+  getPrisma() {
+    return getSharedPrismaClient();
+  }
+
+  /**
    * تحميل الشركات من قاعدة البيانات
    */
   async loadCompanies() {
     try {
-      const companies = await this.prisma.company.findMany({
-        select: { id: true, name: true }
-      });
+      const companies = await safeQuery(async () => {
+        const prisma = this.getPrisma();
+        return await prisma.company.findMany({
+          select: { id: true, name: true }
+        });
+      }, 5); // Priority 5
 
       this.companies = companies.map(c => c.id);
       //console.log(`🏢 [AutoPatternService] Loaded ${this.companies.length} companies for pattern detection`);
@@ -161,10 +170,13 @@ class AutoPatternDetectionService {
       }
 
       // فحص آخر مرة تم اكتشاف أنماط فيها
-      const lastPattern = await this.prisma.successPattern.findFirst({
-        where: { companyId },
-        orderBy: { createdAt: 'desc' }
-      });
+      const lastPattern = await safeQuery(async () => {
+        const prisma = this.getPrisma();
+        return await prisma.successPattern.findFirst({
+          where: { companyId },
+          orderBy: { createdAt: 'desc' }
+        });
+      }, 3);
 
       // تحديد المدة الزمنية للبحث
       let timeRange = 7; // أسبوع افتراضي
@@ -206,10 +218,13 @@ class AutoPatternDetectionService {
   async isPatternSystemEnabledForCompany(companyId) {
     try {
       // جلب إعدادات الشركة
-      const company = await this.prisma.company.findUnique({
-        where: { id: companyId },
-        select: { settings: true }
-      });
+      const company = await safeQuery(async () => {
+        const prisma = this.getPrisma();
+        return await prisma.company.findUnique({
+          where: { id: companyId },
+          select: { settings: true }
+        });
+      }, 3); // Priority 3
 
       if (!company) {
         //console.log(`⚠️ [AutoPatternService] Company ${companyId} not found`);
@@ -378,10 +393,13 @@ class AutoPatternDetectionService {
       //console.log(`🟢 [AutoPatternService] Enabling pattern system for company: ${companyId}`);
 
       // جلب الإعدادات الحالية
-      const company = await this.prisma.company.findUnique({
-        where: { id: companyId },
-        select: { settings: true }
-      });
+      const company = await safeQuery(async () => {
+        const prisma = this.getPrisma();
+        return await prisma.company.findUnique({
+          where: { id: companyId },
+          select: { settings: true }
+        });
+      }, 3);
 
       let currentSettings = {};
       try {
@@ -399,12 +417,15 @@ class AutoPatternDetectionService {
       };
 
       // حفظ الإعدادات
-      await this.prisma.company.update({
-        where: { id: companyId },
-        data: {
-          settings: JSON.stringify(updatedSettings)
-        }
-      });
+      await safeQuery(async () => {
+        const prisma = this.getPrisma();
+        return await prisma.company.update({
+          where: { id: companyId },
+          data: {
+            settings: JSON.stringify(updatedSettings)
+          }
+        });
+      }, 5);
 
       //console.log(`✅ [AutoPatternService] Pattern system enabled for company: ${companyId}`);
       return true;
@@ -422,10 +443,13 @@ class AutoPatternDetectionService {
       //console.log(`🔴 [AutoPatternService] Disabling pattern system for company: ${companyId}`);
 
       // جلب الإعدادات الحالية
-      const company = await this.prisma.company.findUnique({
-        where: { id: companyId },
-        select: { settings: true }
-      });
+      const company = await safeQuery(async () => {
+        const prisma = this.getPrisma();
+        return await prisma.company.findUnique({
+          where: { id: companyId },
+          select: { settings: true }
+        });
+      }, 3);
 
       let currentSettings = {};
       try {
@@ -443,12 +467,15 @@ class AutoPatternDetectionService {
       };
 
       // حفظ الإعدادات
-      await this.prisma.company.update({
-        where: { id: companyId },
-        data: {
-          settings: JSON.stringify(updatedSettings)
-        }
-      });
+      await safeQuery(async () => {
+        const prisma = this.getPrisma();
+        return await prisma.company.update({
+          where: { id: companyId },
+          data: {
+            settings: JSON.stringify(updatedSettings)
+          }
+        });
+      }, 5);
 
       //console.log(`✅ [AutoPatternService] Pattern system disabled for company: ${companyId}`);
       return true;

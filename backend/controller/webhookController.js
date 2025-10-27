@@ -1,4 +1,4 @@
-const { getSharedPrismaClient, safeQuery } = require('../services/sharedDatabase');
+const { getSharedPrismaClient, safeQuery, healthCheck } = require('../services/sharedDatabase');
 const socketService = require('../services/socketService');
 
 // ⚠️ CRITICAL: Always use safeQuery() instead of direct prisma calls
@@ -112,6 +112,15 @@ const postWebhook = async (req, res) => {
     res.status(200).send('EVENT_RECEIVED');
 
     const body = req.body;
+
+    // NEW: Skip processing entirely during DB cooldown to avoid log spam and futile retries
+    try {
+      const db = await healthCheck();
+      if (db?.status === 'cooldown') {
+        // Database is in cooldown; drop processing silently (response already sent)
+        return;
+      }
+    } catch { /* ignore health check errors */ }
 
     // Validate request body
     if (!body || !body.entry) {
@@ -430,8 +439,14 @@ async function handlePageReply(webhookEvent, pageId = null) {
     
     try {
       if (conversation.metadata) {
-        const convMetadata = JSON.parse(conversation.metadata);
-        // console.log(`📝 [ECHO-DEBUG] Parsed conversation metadata:`, JSON.stringify(convMetadata));
+        let convMetadata = {};
+        try {
+          convMetadata = JSON.parse(conversation.metadata);
+          // console.log(`📝 [ECHO-DEBUG] Parsed conversation metadata:`, JSON.stringify(convMetadata));
+        } catch (parseError) {
+          console.warn('⚠️ Error parsing conversation metadata for sender info:', parseError.message);
+          convMetadata = {};
+        }
         
         if (convMetadata.lastSenderId) {
           senderUserId = convMetadata.lastSenderId;
@@ -444,7 +459,25 @@ async function handlePageReply(webhookEvent, pageId = null) {
         // console.warn(`⚠️ [ECHO-SENDER] No metadata found in conversation`);
       }
     } catch (e) {
-      // console.error('❌ Error parsing conversation metadata for sender info:', e);
+      console.error('❌ Error parsing conversation metadata for sender info:', e);
+    }
+
+    // 🔍 CRITICAL: Check if message already exists (broadcast messages are saved before sending)
+    const existingMessage = await safeQuery(async () => {
+      const prisma = getPrisma();
+      return await prisma.message.findFirst({
+        where: {
+          conversationId: conversation.id,
+          metadata: {
+            contains: messageId // Check if facebookMessageId exists in metadata
+          }
+        }
+      });
+    }, 3);
+
+    if (existingMessage) {
+      console.log(`⚠️ [PAGE-REPLY] Message already exists (broadcast) - skipping duplicate: ${messageId.slice(-8)}`);
+      return; // Exit early to prevent duplicate
     }
 
     // Save the page reply as a message in the existing conversation
@@ -485,7 +518,17 @@ async function handlePageReply(webhookEvent, pageId = null) {
     // تنظيف الـ metadata بعد حفظ الرسالة
     if (senderUserId) {
       try {
-        const convMetadata = JSON.parse(conversation.metadata || '{}');
+        // Safely parse metadata - use empty object if parsing fails
+        let convMetadata = {};
+        try {
+          if (conversation.metadata) {
+            convMetadata = JSON.parse(conversation.metadata);
+          }
+        } catch (parseError) {
+          console.warn('⚠️ Error parsing conversation metadata:', parseError.message);
+          convMetadata = {};
+        }
+        
         delete convMetadata.lastSenderId;
         delete convMetadata.lastSenderName;
         
@@ -499,31 +542,36 @@ async function handlePageReply(webhookEvent, pageId = null) {
           });
         }, 3);
       } catch (e) {
-        console.warn('⚠️ Error cleaning up sender metadata');
+        console.warn('⚠️ Error cleaning up sender metadata:', e.message);
       }
     }
     
     // Emit Socket.IO event to display in the frontend
     const io = socketService.getIO();
     if (io) {
-      const parsedMetadata = JSON.parse(pageReplyMessage.metadata);
-      const socketData = {
-        id: pageReplyMessage.id,
-        conversationId: pageReplyMessage.conversationId,
-        content: pageReplyMessage.content,
-        type: pageReplyMessage.type.toLowerCase(),
-        isFromCustomer: pageReplyMessage.isFromCustomer,
-        timestamp: pageReplyMessage.createdAt,
-        metadata: parsedMetadata,
-        attachments: pageReplyMessage.attachments, // Keep as string for frontend to parse
-        isFacebookReply: true, // Mark as Facebook page reply for frontend
-        facebookMessageId: messageId, // Include Facebook message ID
-        // ⚡ Add isAiGenerated flag for frontend styling
-        isAiGenerated: parsedMetadata.isAIGenerated || false
-      };
-      
-      io.emit('new_message', socketData);
-     // console.log(`✅ [SAVED] ${messageId.slice(-8)} -> Conv ${conversation.id}`);
+      try {
+        const parsedMetadata = JSON.parse(pageReplyMessage.metadata);
+        const socketData = {
+          id: pageReplyMessage.id,
+          conversationId: pageReplyMessage.conversationId,
+          content: pageReplyMessage.content,
+          type: pageReplyMessage.type.toLowerCase(),
+          isFromCustomer: pageReplyMessage.isFromCustomer,
+          timestamp: pageReplyMessage.createdAt,
+          metadata: parsedMetadata,
+          attachments: pageReplyMessage.attachments, // Keep as string for frontend to parse
+          isFacebookReply: true, // Mark as Facebook page reply for frontend
+          facebookMessageId: messageId, // Include Facebook message ID
+          // ⚡ Add isAiGenerated flag for frontend styling
+          isAiGenerated: parsedMetadata.isAIGenerated || false
+        };
+        
+        io.emit('new_message', socketData);
+       // console.log(`✅ [SAVED] ${messageId.slice(-8)} -> Conv ${conversation.id}`);
+      } catch (socketError) {
+        console.error('⚠️ [PAGE-REPLY] Error emitting socket event:', socketError.message);
+        // Don't throw - message is already saved
+      }
     } else {
       //console.log(`❌ [PAGE-REPLY] Socket.IO not available - message saved but not broadcast`);
     }
@@ -545,16 +593,30 @@ async function handlePageReply(webhookEvent, pageId = null) {
       preview = preview.substring(0, 100) + '...';
     }
     
-    await safeQuery(async () => {
-      const prisma = getPrisma();
-      return await prisma.conversation.update({
-        where: { id: conversation.id },
-        data: {
-          lastMessageAt: new Date(webhookEvent.timestamp),
-          lastMessagePreview: preview
-        }
-      });
-    }, 3);
+    // Sanitize preview to prevent hex escape errors
+    if (preview) {
+      // Remove any problematic characters that could cause hex escape issues
+      preview = preview.replace(/[\x00-\x1F\x7F-\x9F]/g, ''); // Remove control characters
+      preview = preview.replace(/\\x[0-9A-Fa-f]{0,1}/g, ''); // Remove incomplete hex escapes
+      // Trim and ensure it's a valid string
+      preview = preview.trim();
+    }
+    
+    try {
+      await safeQuery(async () => {
+        const prisma = getPrisma();
+        return await prisma.conversation.update({
+          where: { id: conversation.id },
+          data: {
+            lastMessageAt: new Date(webhookEvent.timestamp),
+            lastMessagePreview: preview || ''
+          }
+        });
+      }, 3);
+    } catch (updateError) {
+      console.error('⚠️ [PAGE-REPLY] Error updating conversation preview:', updateError.message);
+      // Don't throw - this is non-critical, message is already saved
+    }
     
     // Processing completed
     

@@ -34,15 +34,15 @@ class AIQualityEvaluator {
     try {
       // أولاً: محاولة قراءة من قاعدة البيانات
       try {
-        const { PrismaClient } = require('@prisma/client');
-        const prisma = new PrismaClient();
+        const { getSharedPrismaClient, safeQuery } = require('./sharedDatabase');
 
-        const aiSettings = await prisma.aiSettings.findUnique({
-          where: { companyId },
-          select: { qualityEvaluationEnabled: true }
-        });
-
-        await prisma.$disconnect();
+        const aiSettings = await safeQuery(async () => {
+          const prisma = getSharedPrismaClient();
+          return await prisma.aiSettings.findUnique({
+            where: { companyId },
+            select: { qualityEvaluationEnabled: true }
+          });
+        }, 3);
 
         if (aiSettings !== null) {
           const isEnabled = aiSettings.qualityEvaluationEnabled !== false;
